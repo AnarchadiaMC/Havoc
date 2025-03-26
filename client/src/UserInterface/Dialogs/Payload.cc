@@ -478,6 +478,7 @@ auto Payload::DefaultConfig() -> void
     auto DemonConfig             = HavocX::Teamserver.DemonConfig;
     auto ConfigSleep             = new QTreeWidgetItem( TreeConfig );
     auto ConfigJitter            = new QTreeWidgetItem( TreeConfig );
+    auto ConfigObfuscation       = new QTreeWidgetItem( TreeConfig );
     auto ConfigServiceName       = ( QTreeWidgetItem* ) nullptr;
     auto ConfigServiceNameInput  = ( QLineEdit* ) nullptr;
 
@@ -509,6 +510,7 @@ auto Payload::DefaultConfig() -> void
     auto ConfigSleepLineEdit     = new QLineEdit( QString::number( DemonConfig[ "Sleep" ].toInt() ) );
     auto ConfigJitterLineEdit    = new QLineEdit( QString::number( Jitter ) );
     auto ConfigIndSyscallCheck   = new QCheckBox;
+    auto ConfigObfuscationCheck  = new QCheckBox;
     auto ConfigInjectAlloc       = new QComboBox;
     auto ConfigInjectExecute     = new QComboBox;
     auto ConfigStackSpoof        = new QCheckBox;
@@ -524,6 +526,7 @@ auto Payload::DefaultConfig() -> void
 
     ConfigSleep->setFlags( Qt::NoItemFlags );
     ConfigJitter->setFlags( Qt::NoItemFlags );
+    ConfigObfuscation->setFlags( Qt::NoItemFlags );
     if ( Format.compare( "Windows Service Exe" ) == 0 )
     {
         ConfigServiceName->setFlags( Qt::NoItemFlags );
@@ -543,6 +546,7 @@ auto Payload::DefaultConfig() -> void
     ConfigSleepLineEdit->setObjectName( "ConfigItem" );
     ConfigJitterLineEdit->setObjectName( "ConfigItem" );
     ConfigIndSyscallCheck->setObjectName( "ConfigItem" );
+    ConfigObfuscationCheck->setObjectName( "ConfigItem" );
     ConfigStackSpoof->setObjectName( "ConfigItem" );
     ConfigInjectAlloc->setObjectName( "ConfigItem" );
     ConfigInjectExecute->setObjectName( "ConfigItem" );
@@ -555,6 +559,7 @@ auto Payload::DefaultConfig() -> void
     AmsiEtwPatch->setObjectName( "ConfigItem" );
 
     ConfigIndSyscallCheck->setChecked( DefaultIndSyscallCheck );
+    ConfigObfuscationCheck->setChecked( true );
     ConfigStackSpoof->setChecked( DefaultStackDuplication );
 
     SleepObfJmpBypass->addItems( QStringList() << "None" << "jmp rax" << "jmp rbx" );
@@ -595,6 +600,7 @@ auto Payload::DefaultConfig() -> void
 
     TreeConfig->setItemWidget( ConfigSleep, 1, ConfigSleepLineEdit );
     TreeConfig->setItemWidget( ConfigJitter, 1, ConfigJitterLineEdit );
+    TreeConfig->setItemWidget( ConfigObfuscation, 1, ConfigObfuscationCheck );
     if ( Format.compare( "Windows Service Exe" ) == 0 ) {
         TreeConfig->setItemWidget( ConfigServiceName,  1, ConfigServiceNameInput );
     }
@@ -612,6 +618,7 @@ auto Payload::DefaultConfig() -> void
 
     ConfigSleep->setText( 0, "Sleep" );
     ConfigJitter->setText( 0, "Jitter" );
+    ConfigObfuscation->setText( 0, "Enable Obfuscation" );
 
     if ( Format.compare( "Windows Service Exe" ) == 0 ) {
         ConfigServiceName->setText( 0, "Service Name" );

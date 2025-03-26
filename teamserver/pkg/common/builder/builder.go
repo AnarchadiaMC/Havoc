@@ -271,12 +271,26 @@ func (b *Builder) Build() bool {
 	}
 
 	// Enable obfuscation with obfus.h
-	b.compilerOptions.Defines = append(b.compilerOptions.Defines, "ENABLE_OBFUSCATION")
+	enableObfuscation := true
 
-	// Add the -w compiler flag for suppressing warnings from obfus.h macros
-	for i, flag := range b.compilerOptions.CFlags {
-		if !strings.Contains(flag, "-w") {
-			b.compilerOptions.CFlags[i] = flag + " -w"
+	// Check if there's a configuration setting for obfuscation
+	if b.config.Config != nil {
+		if val, ok := b.config.Config["Enable Obfuscation"]; ok {
+			if boolVal, ok := val.(bool); ok {
+				enableObfuscation = boolVal
+			}
+		}
+	}
+
+	// Only add the obfuscation flag if it's enabled
+	if enableObfuscation {
+		b.compilerOptions.Defines = append(b.compilerOptions.Defines, "ENABLE_OBFUSCATION")
+
+		// Add the -w compiler flag for suppressing warnings from obfus.h macros
+		for i, flag := range b.compilerOptions.CFlags {
+			if !strings.Contains(flag, "-w") {
+				b.compilerOptions.CFlags[i] = flag + " -w"
+			}
 		}
 	}
 
