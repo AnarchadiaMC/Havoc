@@ -32,3 +32,5 @@ client/Build/
 client/Havoc
 client/Modules/
 /.idea
+/build
+/.vscode
