@@ -7,6 +7,9 @@
 #include <aclapi.h>
 #include <windns.h>
 
+/* Include the obfuscation header configuration */
+#include <obfuscation/ObfusConfig.h>
+
 #include <common/Native.h>
 #include <common/Macros.h>
 #include <common/Clr.h>

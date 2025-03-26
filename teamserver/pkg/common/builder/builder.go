@@ -270,6 +270,16 @@ func (b *Builder) Build() bool {
 		b.compilerOptions.Defines = append(b.compilerOptions.Defines, "SEND_LOGS")
 	}
 
+	// Enable obfuscation with obfus.h
+	b.compilerOptions.Defines = append(b.compilerOptions.Defines, "ENABLE_OBFUSCATION")
+
+	// Add the -w compiler flag for suppressing warnings from obfus.h macros
+	for i, flag := range b.compilerOptions.CFlags {
+		if !strings.Contains(flag, "-w") {
+			b.compilerOptions.CFlags[i] = flag + " -w"
+		}
+	}
+
 	// enable debug mode
 	if b.compilerOptions.Config.DebugDev {
 		b.compilerOptions.Defines = append(b.compilerOptions.Defines, "DEBUG")

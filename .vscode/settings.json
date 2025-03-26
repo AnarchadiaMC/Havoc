@@ -1,0 +1,8 @@
+{
+    "cmake.sourceDirectory": "C:/Users/Dustin/OneDrive/Documents/GitHub/Havoc/client",
+    "files.associations": {
+        ".fantomasignore": "ignore",
+        "filesystem": "cpp",
+        "xstring": "cpp"
+    }
+}

