@@ -555,8 +555,6 @@ func (t *Teamserver) handleRequest(id string) {
 		return
 	}
 
-	
-
 	if !t.ClientAuthenticate(pk) {
 		logger.Error("Client [User: " + pk.Head.User + "] failed to Authenticate! (" + colors.Red(client.GlobalIP) + ")")
 		err := t.SendEvent(id, events.Authenticated(false))
