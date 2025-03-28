@@ -50,67 +50,69 @@ def topological_sort(functions: List[Dict[str, Any]], dependencies: Dict[str, Se
     return sorted_functions
 
 
-def scramble_functions(functions: List[Dict[str, Any]], dependencies: Dict[str, Set[str]], verbose: bool = False) -> List[Dict[str, Any]]:
-    """Scramble functions while respecting dependencies
+def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[str]], verbose: bool = False) -> List[Dict]:
+    """Scramble the order of functions while respecting dependencies
     
     Args:
-        functions: List of functions to scramble
-        dependencies: Dictionary mapping function names to sets of dependencies
+        functions: Dictionary of functions (name -> function info)
+        dependencies: Dictionary of function dependencies
         verbose: Whether to print verbose output
         
     Returns:
-        List of scrambled functions
+        List of functions in scrambled order
     """
-    if verbose:
-        print("Sorting and scrambling functions...")
+    function_names = list(functions.keys())
+    
+    # Create a list to hold the sorted functions
+    sorted_functions = []
+    
+    # Keep track of which functions have been added
+    added = set()
+    
+    # Helper function to add a function and its dependencies
+    def add_function_with_deps(func_name):
+        # Check if already added
+        if func_name in added:
+            return
         
-    sorted_function_names = topological_sort(functions, dependencies, verbose)
+        # First add dependencies
+        for dep in dependencies.get(func_name, []):
+            add_function_with_deps(dep)
+        
+        # Then add the function itself
+        if func_name not in added:
+            sorted_functions.append(functions[func_name])
+            added.add(func_name)
+            if verbose:
+                print(f"Added {func_name} to sorted functions")
     
-    # Group functions that can be scrambled together
-    groups = []
-    current_group = []
+    # Add functions in a way that respects dependencies
+    while len(added) < len(function_names):
+        # Pick a random function that hasn't been added yet
+        remaining = [f for f in function_names if f not in added]
+        next_func = random.choice(remaining)
+        
+        # Add it with its dependencies
+        add_function_with_deps(next_func)
     
-    for function_name in sorted_function_names:
-        function = next((f for f in functions if f['name'] == function_name), None)
-        if function:
-            if not current_group or all(not depends_on(function_name, f['name'], dependencies) for f in current_group):
-                current_group.append(function)
-            else:
-                groups.append(current_group)
-                current_group = [function]
-    
-    if current_group:
-        groups.append(current_group)
-    
-    # Shuffle each group internally
-    final_functions = []
-    for group in groups:
-        random.shuffle(group)
-        final_functions.extend(group)
-    
-    # Ensure all functions are included
-    function_names_included = {f['name'] for f in final_functions}
-    missing_functions = [f for f in functions if f['name'] not in function_names_included]
-    final_functions.extend(missing_functions)
-    
-    return final_functions
+    return sorted_functions
 
 
-def depends_on(func1: str, func2: str, dependencies: Dict[str, Set[str]]) -> bool:
+def depends_on(func1: str, func2: str, dependencies: Dict[str, List[str]]) -> bool:
     """Check if func1 depends on func2 directly or indirectly
     
     Args:
         func1: First function name
         func2: Second function name
-        dependencies: Dictionary mapping function names to sets of dependencies
+        dependencies: Dictionary mapping function names to lists of dependencies
         
     Returns:
         True if func1 depends on func2, False otherwise
     """
-    if func2 in dependencies.get(func1, set()):
+    if func2 in dependencies.get(func1, []):
         return True
     
-    for dependency in dependencies.get(func1, set()):
+    for dependency in dependencies.get(func1, []):
         if depends_on(dependency, func2, dependencies):
             return True
     

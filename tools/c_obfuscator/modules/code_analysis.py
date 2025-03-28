@@ -4,6 +4,7 @@ Code Analysis Module - Extracts and analyzes C code structures
 
 import re
 from typing import List, Dict, Set, Tuple, Any
+import random
 
 
 def preprocess_code(code: str, verbose: bool = False) -> str:
@@ -20,18 +21,33 @@ def preprocess_code(code: str, verbose: bool = False) -> str:
     required_headers = ["<stdlib.h>", "<string.h>"]
     result_code = code
     
-    for header in required_headers:
-        if f"#include {header}" not in result_code:
+    # First, compact all include statements (remove blank lines between them)
+    include_pattern = r'#include\s+[<"].*[>"]\s*'
+    includes = [m.group(0) for m in re.finditer(include_pattern, result_code)]
+    
+    if includes:
+        # Remove all existing includes
+        for include in includes:
+            result_code = result_code.replace(include, '')
+        
+        # Clean up any excessive newlines created by removing includes
+        result_code = re.sub(r'\n{2,}', '\n', result_code)
+        
+        # Add required headers if not present
+        for header in required_headers:
+            if not any(header in include for include in includes):
+                if verbose:
+                    print(f"Adding {header} include for required functions")
+                includes.append(f"#include {header}")
+        
+        # Insert all includes at the beginning, with no blank lines between them
+        result_code = '\n'.join(includes) + '\n' + result_code.lstrip()
+    else:
+        # No includes found, add at the beginning
+        for header in required_headers:
             if verbose:
                 print(f"Adding {header} include for required functions")
-            includes = list(re.finditer(r'#include\s+[<"].*[>"]\s*', result_code))
-            if includes:
-                last_include = includes[-1]
-                insertion_point = last_include.end()
-                result_code = result_code[:insertion_point] + f"\n#include {header}" + result_code[insertion_point:]
-            else:
-                # No includes found, add at the beginning
-                result_code = f"#include {header}\n" + result_code
+            result_code = f"#include {header}\n" + result_code
     
     return result_code
 
@@ -260,305 +276,257 @@ def extract_string_literals(code: str, verbose: bool = False) -> List[Dict[str, 
     return string_literals
 
 
-def extract_function_declarations(code: str, verbose: bool = False) -> List[Dict[str, Any]]:
-    """Extract function declarations for proper dependency tracking
+def extract_function_declarations(code: str, verbose: bool = False) -> List[Dict]:
+    """Extract function declarations (prototypes) from the code
     
     Args:
-        code: Code to extract function declarations from
+        code: The C code to process
         verbose: Whether to print verbose output
         
     Returns:
         List of function declarations with positions
     """
-    # This regex matches C function declarations (prototypes)
-    decl_pattern = r'((?:[\w\*\s]+)\s+[\w\*]+\s*\([^)]*\)\s*;)'
+    # Pattern for function declarations (not definitions)
+    # This needs to match declarations like:
+    # VOID Function(PVOID Param);
+    # int Function(int a, int b);
+    # static char* Function(void* data, size_t len) OPTIONAL;
+    # _Noreturn void Function(void);
+    # etc.
     
-    matches = re.finditer(decl_pattern, code)
+    declaration_pattern = r'((?:extern|static|inline|_Noreturn)?\s*(?:VOID|void|BOOL|INT|int|DWORD|PVOID|LPVOID|HANDLE|ULONG|NTSTATUS|SIZE_T|HRESULT|char\s*\*|wchar_t\s*\*|PCHAR|PWCHAR|LPCSTR|LPWSTR|LPSTR|WCHAR|CHAR|BYTE|PBYTE|WORD|DWORD|QWORD|SHORT|USHORT|LONG|ULONG|LONGLONG|ULONGLONG|float|double|FLOAT|DOUBLE)[\s\*]+)(\w+)(\s*\([^;{]*\);)'
     
-    function_declarations = []
-    for match in matches:
-        decl_text = match.group(0)
-        start_index = match.start()
-        end_index = match.end()
+    declarations = []
+    
+    for match in re.finditer(declaration_pattern, code):
+        return_type = match.group(1).strip()
+        function_name = match.group(2).strip()
+        parameters = match.group(3).strip()
         
-        # Extract function name
-        name_pattern = r'(\w+)\s*\('
-        name_match = re.search(name_pattern, decl_text)
-        function_name = name_match.group(1) if name_match else "unknown"
+        declaration = match.group(0).strip()
         
-        function_declarations.append({
+        declarations.append({
             'name': function_name,
-            'text': decl_text,
-            'start': start_index,
-            'end': end_index
+            'return_type': return_type,
+            'parameters': parameters,
+            'declaration': declaration,
+            'start': match.start(),
+            'end': match.end()
         })
     
     if verbose:
-        print(f"Extracted {len(function_declarations)} function declarations")
+        print(f"Extracted {len(declarations)} function declarations")
     
-    return function_declarations
+    return declarations
 
 
-def extract_functions(code: str, verbose: bool = False) -> List[Dict[str, Any]]:
-    """Extract function definitions from the C code
+def extract_functions(code: str, verbose: bool = False) -> Dict[str, Dict]:
+    """Extract function declarations and definitions from the code
     
     Args:
-        code: Code to extract functions from
+        code: The C code to process
         verbose: Whether to print verbose output
-        
+    
     Returns:
-        List of functions with positions
+        Dictionary of function information with keys:
+            - name: Function name
+            - declaration: Function declaration
+            - text: Full function text
+            - start: Start position in code
+            - end: End position in code
     """
-    # Simpler pattern to match function headers
-    function_pattern = r'((?:VOID|void|static|inline)\s+)(Demon[A-Za-z]+)(\s*\([^{]*\{)'
+    functions = {}
     
-    # Find all potential function starts
-    potential_functions = list(re.finditer(function_pattern, code))
+    # Define a more comprehensive function pattern that captures various return types and attributes
+    function_pattern = r'((?:_Noreturn\s+)?(?:VOID|void|static|inline|BOOL|INT|int|DWORD|PVOID|LPVOID|HANDLE|ULONG|NTSTATUS|SIZE_T|HRESULT|char\s*\*|wchar_t\s*\*|PCHAR|PWCHAR|LPCSTR|LPWSTR|LPSTR|WCHAR|CHAR|BYTE|PBYTE|WORD|DWORD|QWORD|SHORT|USHORT|LONG|ULONG|LONGLONG|ULONGLONG|float|double|FLOAT|DOUBLE)[\s\*]+)(\w+)(\s*\([^{]*\{)'
     
-    functions = []
-    
-    # For each potential function, find the matching closing brace
-    for i, match in enumerate(potential_functions):
-        full_match = match.group(0)
-        return_type = match.group(1)
-        function_name = match.group(2)
-        parameters = match.group(3)
+    # Find all functions in the code
+    for match in re.finditer(function_pattern, code, re.MULTILINE | re.DOTALL):
+        # Extract function name and declaration
+        return_type = match.group(1).strip()
+        name = match.group(2).strip()
+        params = match.group(3).strip()
         
-        # Skip main function and any function that starts with an underscore
-        if function_name == "main" or function_name.startswith("_"):
-            continue
-            
-        start_index = match.start()
+        # Check for _Noreturn attribute
+        is_noreturn = '_Noreturn' in return_type
+        if is_noreturn and verbose:
+            print(f"Found _Noreturn attribute for {name}")
         
-        # Find the matching closing brace by counting opening and closing braces
-        open_braces = 1  # Start with 1 for the opening brace we've already found
-        end_index = None
-        in_string = False
-        in_char = False
-        in_comment = False
-        in_line_comment = False
-        escape_next = False
+        # Find the end of the function (matching closing brace)
+        start_pos = match.start()
+        current_pos = match.end()
+        brace_count = 1  # We've already found the opening brace
         
-        i = match.end()
-        while i < len(code):
-            char = code[i]
-            
-            # Handle string and character literals
-            if escape_next:
-                escape_next = False
-                i += 1
-                continue
-            
-            if char == '\\':
-                escape_next = True
-                i += 1
-                continue
-            
-            # Handle comments
-            if i < len(code) - 1:
-                if not in_string and not in_char and not in_comment and not in_line_comment:
-                    if code[i:i+2] == '/*':
-                        in_comment = True
-                        i += 2
-                        continue
-                    elif code[i:i+2] == '//':
-                        in_line_comment = True
-                        i += 2
-                        continue
-            
-            if in_comment:
-                if i < len(code) - 1 and code[i:i+2] == '*/':
-                    in_comment = False
-                    i += 2
-                else:
-                    i += 1
-                continue
-            
-            if in_line_comment:
-                if char == '\n':
-                    in_line_comment = False
-                i += 1
-                continue
-            
-            if not in_string and not in_char and char == '"':
-                in_string = True
-                i += 1
-                continue
-            
-            if not in_string and not in_char and char == "'":
-                in_char = True
-                i += 1
-                continue
-            
-            if in_string and char == '"':
-                in_string = False
-                i += 1
-                continue
-            
-            if in_char and char == "'":
-                in_char = False
-                i += 1
-                continue
-            
-            # Only count braces if not in string or char literals
-            if not in_string and not in_char:
-                if char == '{':
-                    open_braces += 1
-                elif char == '}':
-                    open_braces -= 1
-                    if open_braces == 0:
-                        end_index = i + 1
-                        break
-            
-            i += 1
+        while brace_count > 0 and current_pos < len(code):
+            char = code[current_pos]
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+            current_pos += 1
         
-        if end_index is None:
-            if verbose:
-                print(f"Warning: Could not find closing brace for function {function_name}")
+        if brace_count > 0:
+            # Function end not found, code might be incomplete
             continue
         
-        function_text = code[start_index:end_index]
+        # Extract the full function text
+        function_text = code[start_pos:current_pos].strip()
         
-        # Ensure this is actually a function and not a struct/enum definition
-        # This checks for typical keywords that might indicate non-function code
-        if re.search(r'\b(struct|union|enum|typedef)\b', function_text.split('{')[0]):
-            continue
-        
-        functions.append({
-            'name': function_name,
+        # Store the function information
+        functions[name] = {
+            'name': name,
+            'declaration': f"{return_type} {name}{params}",
             'text': function_text,
-            'start': start_index,
-            'end': end_index
-        })
+            'start': start_pos,
+            'end': current_pos
+        }
     
     if verbose:
         print(f"Extracted {len(functions)} functions")
-        for func in functions:
-            print(f"  - {func['name']}")
+        for name in functions:
+            print(f"  - {name}")
     
     return functions
 
 
-def analyze_function_dependencies(functions: List[Dict[str, Any]], verbose: bool = False) -> Dict[str, Set[str]]:
-    """Analyze function dependencies to ensure correct reordering
+def analyze_function_dependencies(functions: Dict[str, Dict], verbose: bool = False) -> Dict[str, List[str]]:
+    """Analyze function dependencies by looking for function calls within function bodies
     
     Args:
-        functions: List of functions to analyze
+        functions: Dictionary of functions (name -> function info)
         verbose: Whether to print verbose output
         
     Returns:
-        Dictionary mapping function names to sets of dependencies
+        Dictionary mapping function names to lists of dependencies
     """
-    function_dependencies = {}
+    dependencies = {}
+    function_names = list(functions.keys())
     
-    function_names = [func['name'] for func in functions]
-    
-    for function in functions:
-        name = function['name']
-        function_dependencies[name] = set()
+    # For each function, look for calls to other functions
+    for name, func_info in functions.items():
+        function_text = func_info['text']
+        dependencies[name] = []
         
-        # Check which other functions this function calls
+        # Look for calls to other functions
         for other_name in function_names:
-            if other_name != name:
-                # Look for function calls (with word boundaries to avoid partial matches)
-                if re.search(r'\b' + re.escape(other_name) + r'\s*\(', function['text']):
-                    function_dependencies[name].add(other_name)
+            # Skip self-references
+            if other_name == name:
+                continue
+            
+            # Check if the function calls the other function
+            # This is a simple check, more sophisticated analysis would be needed for complex code
+            pattern = r'\b' + re.escape(other_name) + r'\s*\('
+            if re.search(pattern, function_text):
+                dependencies[name].append(other_name)
     
     if verbose:
         print("Function dependencies:")
-        for func, deps in function_dependencies.items():
-            print(f"  {func} depends on: {', '.join(deps) if deps else 'none'}")
+        for name, deps in dependencies.items():
+            if deps:
+                print(f"  {name} depends on: {', '.join(deps)}")
+            else:
+                print(f"  {name} depends on: none")
     
-    return function_dependencies
+    return dependencies
 
 
-def depends_on(func1: str, func2: str, dependencies: Dict[str, Set[str]]) -> bool:
+def depends_on(func1: str, func2: str, dependencies: Dict[str, List[str]]) -> bool:
     """Check if func1 depends on func2 directly or indirectly
     
     Args:
         func1: First function name
         func2: Second function name
-        dependencies: Dictionary mapping function names to sets of dependencies
+        dependencies: Dictionary mapping function names to lists of dependencies
         
     Returns:
         True if func1 depends on func2, False otherwise
     """
-    if func2 in dependencies.get(func1, set()):
+    if func2 in dependencies.get(func1, []):
         return True
     
-    for dependency in dependencies.get(func1, set()):
+    for dependency in dependencies.get(func1, []):
         if depends_on(dependency, func2, dependencies):
             return True
     
     return False
 
 
-def extract_code_sections(code: str, functions: List[Dict[str, Any]], 
-                         function_declarations: List[Dict[str, Any]], verbose: bool = False) -> Dict[str, str]:
-    """Extract various sections of the code
+def extract_code_sections(code: str, functions: Dict[str, Dict], declarations: List[Dict], globals_info: List[Dict], verbose: bool = False) -> Dict[str, str]:
+    """Extract different sections of the code for separate processing
     
     Args:
-        code: Code to extract sections from
-        functions: List of functions
-        function_declarations: List of function declarations
+        code: The C code to process
+        functions: Dictionary of functions (name -> function info)
+        declarations: List of function declarations
+        globals_info: List of global variable declarations
         verbose: Whether to print verbose output
         
     Returns:
-        Dictionary containing 'includes', 'globals', and 'remaining' sections
+        Dictionary of code sections
     """
-    # Find includes section
-    includes_pattern = r'#include\s+[<"].*[>"]\s*'
-    includes = []
-    
-    for match in re.finditer(includes_pattern, code):
-        includes.append(match.group(0))
-    
-    includes_section = "\n".join(includes) + "\n"
-    
-    # Find last include position for further processing
-    last_include_pos = 0
-    if includes:
-        last_include_pos = max(m.end() for m in re.finditer(includes_pattern, code))
-    
-    # Extract global variables
-    globals_pattern = r'(?:extern|static|const)?\s*(?:\w+)\s+(?:\w+)(?:\s*=\s*[^;]+)?;'
-    globals_section = ""
-    
-    for match in re.finditer(globals_pattern, code[last_include_pos:]):
-        start_pos = last_include_pos + match.start()
-        end_pos = last_include_pos + match.end()
-        
-        # Make sure this isn't inside a function or declaration
-        if not any(func['start'] <= start_pos <= func['end'] for func in functions) and \
-           not any(decl['start'] <= start_pos <= decl['end'] for decl in function_declarations):
-            globals_section += code[start_pos:end_pos] + "\n"
-    
-    # Extract remaining non-function code (avoiding duplicates)
-    function_ranges = [(f['start'], f['end']) for f in functions]
-    remaining_code = ""
-    
-    pos = last_include_pos + len(globals_section)
-    while pos < len(code):
-        # Check if current position is inside any function
-        inside_function = False
-        for start, end in function_ranges:
-            if start <= pos < end:
-                inside_function = True
-                pos = end  # Skip to end of function
-                break
-        
-        if not inside_function:
-            remaining_code += code[pos]
-            pos += 1
-    
-    # Clean up excess whitespace
-    remaining_code = re.sub(r'\n{3,}', '\n\n', remaining_code)
-    
-    return {
-        'includes': includes_section,
-        'globals': globals_section,
-        'remaining': remaining_code
+    sections = {
+        'includes': '',      # Include statements
+        'globals': '',       # Global variables
+        'remaining': ''      # Everything else
     }
+    
+    # First, extract includes
+    include_pattern = r'#include\s+[<"].*[>"]\s*'
+    includes = []
+    for match in re.finditer(include_pattern, code):
+        includes.append((match.start(), match.end(), match.group(0)))
+    
+    # Sort includes by position
+    includes.sort(key=lambda x: x[0])
+    
+    # Concatenate all includes
+    for start_pos, end_pos, include_text in includes:
+        sections['includes'] += include_text + '\n'
+    
+    # Next, extract globals
+    global_text = ''
+    for global_var in globals_info:
+        global_text += code[global_var['start']:global_var['end']] + '\n'
+    sections['globals'] = global_text
+    
+    # Now, extract everything else that's not a function or include
+    remaining_text = ''
+    pos = 0
+    
+    # Sort all includes, globals, and functions by position
+    all_items = []
+    for start_pos, end_pos, _ in includes:
+        all_items.append(('include', start_pos, end_pos))
+    
+    for global_var in globals_info:
+        all_items.append(('global', global_var['start'], global_var['end']))
+    
+    for _, func_info in functions.items():
+        all_items.append(('function', func_info['start'], func_info['end']))
+    
+    for declaration in declarations:
+        all_items.append(('declaration', declaration['start'], declaration['end']))
+    
+    # Sort by start position
+    all_items.sort(key=lambda x: x[1])
+    
+    # Extract remaining text between items
+    for item_type, start_pos, end_pos in all_items:
+        if pos < start_pos:
+            chunk = code[pos:start_pos].strip()
+            if chunk:
+                remaining_text += chunk + '\n'
+        pos = max(pos, end_pos)
+    
+    # Add any remaining text after the last item
+    if pos < len(code):
+        chunk = code[pos:].strip()
+        if chunk:
+            remaining_text += chunk + '\n'
+    
+    sections['remaining'] = remaining_text
+    
+    return sections
 
 
 def remove_empty_lines(code: str, verbose: bool = False) -> str:
@@ -572,12 +540,168 @@ def remove_empty_lines(code: str, verbose: bool = False) -> str:
         Code with empty lines removed
     """
     original_size = len(code)
+    original_line_count = code.count('\n') + 1
+    
+    # Split by line and remove all empty lines
     lines = code.split('\n')
     non_empty_lines = [line for line in lines if line.strip()]
-    cleaned_code = '\n'.join(non_empty_lines)
+    
+    # Join the lines back together with no empty lines
+    final_code = '\n'.join(non_empty_lines)
     
     if verbose:
-        removed_lines = len(lines) - len(non_empty_lines)
-        print(f"Removed {removed_lines} empty lines ({removed_lines/len(lines)*100:.2f}% of total lines)")
+        removed_lines = original_line_count - (final_code.count('\n') + 1)
+        print(f"Removed {removed_lines} empty lines ({removed_lines/original_line_count*100:.2f}% of total lines)")
     
-    return cleaned_code 
+    return final_code
+
+
+def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[str]], verbose: bool = False) -> List[Dict]:
+    """Scramble the order of functions while respecting dependencies
+    
+    Args:
+        functions: Dictionary of functions (name -> function info)
+        dependencies: Dictionary of function dependencies
+        verbose: Whether to print verbose output
+        
+    Returns:
+        List of functions in scrambled order
+    """
+    function_names = list(functions.keys())
+    
+    # Create a list to hold the sorted functions
+    sorted_functions = []
+    
+    # Keep track of which functions have been added
+    added = set()
+    
+    # Helper function to add a function and its dependencies
+    def add_function_with_deps(func_name):
+        # Check if already added
+        if func_name in added:
+            return
+        
+        # First add dependencies
+        for dep in dependencies.get(func_name, []):
+            add_function_with_deps(dep)
+        
+        # Then add the function itself
+        if func_name not in added:
+            sorted_functions.append(functions[func_name])
+            added.add(func_name)
+            if verbose:
+                print(f"Added {func_name} to sorted functions")
+    
+    # Add functions in a way that respects dependencies
+    while len(added) < len(function_names):
+        # Pick a random function that hasn't been added yet
+        remaining = [f for f in function_names if f not in added]
+        next_func = random.choice(remaining)
+        
+        # Add it with its dependencies
+        add_function_with_deps(next_func)
+    
+    return sorted_functions
+
+
+def extract_global_variables(code: str, functions: Dict[str, Dict], declarations: List[Dict], verbose: bool = False) -> List[Dict]:
+    """Extract global variable declarations from the code
+    
+    Args:
+        code: The C code to process
+        functions: Dictionary of functions (name -> function info)
+        declarations: List of function declarations
+        verbose: Whether to print verbose output
+        
+    Returns:
+        List of global variable declarations with positions
+    """
+    global_vars = []
+    
+    # First, process the critical variables that MUST be preserved in the correct order
+    
+    # AgentConfig declaration
+    agent_config_match = re.search(r'SEC_DATA\s+BYTE\s+AgentConfig\[\]\s*=\s*CONFIG_BYTES\s*;', code)
+    if agent_config_match:
+        if verbose:
+            print("Found AgentConfig declaration")
+        global_vars.append({
+            'name': 'AgentConfig',
+            'text': agent_config_match.group(0),
+            'start': agent_config_match.start(),
+            'end': agent_config_match.end()
+        })
+    
+    # Instance declaration
+    instance_match = re.search(r'(?:SEC_DATA)?\s+PINSTANCE\s+Instance\s*=\s*(?:{\s*0\s*})?;', code)
+    if instance_match:
+        if verbose:
+            print("Found Instance declaration")
+        global_vars.append({
+            'name': 'Instance',
+            'text': instance_match.group(0),
+            'start': instance_match.start(),
+            'end': instance_match.end()
+        })
+    
+    # Extract all other global variables
+    global_pattern = r'(?:SEC_DATA|extern|static|const)?\s*(?:\w+)(?:\s*\*)?\s+(?:\w+)(?:\[\])?\s*(?:=\s*[^;]+)?;'
+    
+    for match in re.finditer(global_pattern, code):
+        start_pos = match.start()
+        end_pos = match.end()
+        
+        # Skip if this global is inside a function
+        if is_inside_any_function(start_pos, functions) or is_inside_any_declaration(start_pos, declarations):
+            continue
+        
+        # Extract the variable name to check for duplicates
+        var_text = match.group(0)
+        name_match = re.search(r'(?:\w+)(?:\s*\*)?\s+(\w+)', var_text)
+        if name_match:
+            var_name = name_match.group(1)
+            
+            # Skip if this is a duplicate or a critical variable we already added
+            if any(var['name'] == var_name for var in global_vars):
+                continue
+                
+            global_vars.append({
+                'name': var_name,
+                'text': var_text,
+                'start': start_pos,
+                'end': end_pos
+            })
+    
+    return global_vars
+
+
+def is_inside_any_function(pos: int, functions: Dict[str, Dict]) -> bool:
+    """Check if a position is inside any function
+    
+    Args:
+        pos: Position to check
+        functions: Dictionary of functions
+        
+    Returns:
+        True if position is inside a function, False otherwise
+    """
+    for _, func_info in functions.items():
+        if func_info['start'] <= pos <= func_info['end']:
+            return True
+    return False
+
+
+def is_inside_any_declaration(pos: int, declarations: List[Dict]) -> bool:
+    """Check if a position is inside any function declaration
+    
+    Args:
+        pos: Position to check
+        declarations: List of function declarations
+        
+    Returns:
+        True if position is inside a declaration, False otherwise
+    """
+    for decl in declarations:
+        if decl['start'] <= pos <= decl['end']:
+            return True
+    return False 
