@@ -34,3 +34,10 @@ client/Modules/
 /.idea
 /build
 /.vscode
+/.cache
+
+# Ignore obfuscated files
+*_obf.*
+rebuild_havoc.sh
+run_havoc.sh
+/tools/c_obfuscator/modules/__pycache__
