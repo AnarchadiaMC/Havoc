@@ -38,12 +38,8 @@ def generate_deobfuscation_function(encryption_key: List[int]) -> str:
     # Format the key as a comma-separated list of bytes
     key_str = ', '.join(str(b) for b in encryption_key)
     
-    # Create the deobfuscation function code
-    deobf_function = f"""/* String deobfuscation function */
-#include <stdlib.h>
-#include <string.h>
-
-static char* deobfuscate_string(const unsigned char* obfuscated, size_t len) {{
+    # Create the deobfuscation function code without includes
+    deobf_function_body = f"""static char* deobfuscate_string(const unsigned char* obfuscated, size_t len) {{
     static unsigned char key[16] = {{{key_str}}};
     char* result = (char*)malloc(len + 1);
     if (!result) return NULL;
@@ -56,6 +52,13 @@ static char* deobfuscate_string(const unsigned char* obfuscated, size_t len) {{
     
     return result;
 }}"""
+    
+    # Create the full deobfuscation function with includes and comment
+    deobf_function = f"""/* String deobfuscation function */
+#include <stdlib.h>
+#include <string.h>
+
+{deobf_function_body}"""
     
     return deobf_function
 
@@ -72,6 +75,23 @@ def create_temp_file(code: str) -> str:
     with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as temp_file:
         temp_file.write(code.encode('utf-8'))
         return temp_file.name
+
+
+def get_includes(code: str) -> List[str]:
+    """Extract include directives from the code
+    
+    Args:
+        code: The C code to process
+        
+    Returns:
+        List of include directives
+    """
+    includes = []
+    for line in code.split('\n'):
+        line = line.strip()
+        if line.startswith('#include'):
+            includes.append(line)
+    return includes
 
 
 def get_string_literals(code: str, verbose: bool = False) -> List[Dict[str, Any]]:

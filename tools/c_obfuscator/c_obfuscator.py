@@ -38,6 +38,7 @@ from modules.string_obfuscation import (
     encrypt_string
 )
 from modules.function_scrambling import scramble_functions
+from modules.optimizer import optimize
 
 class CObfuscator:
     def __init__(self, input_file, output_file=None, reference_proxying=True, verbose=False):
@@ -90,6 +91,11 @@ class CObfuscator:
                 
     def write_output_file(self):
         """Write the obfuscated code to the output file"""
+        # Apply the optimizer as the final step
+        if self.verbose:
+            print("Applying optimizer before writing to disk...")
+        self.obfuscated_code = optimize(self.obfuscated_code, self.verbose)
+        
         write_output_file(self.output_file, self.obfuscated_code, self.verbose)
     
     def obfuscate(self):
@@ -165,11 +171,47 @@ class CObfuscator:
         """
         parts = []
         
-        # Add includes first - this will contain all unique includes
-        if 'includes' in components and components['includes']:
-            parts.append(components['includes'])
+        # We will collect all includes and add them at the top only once
+        unique_includes = {}
+        includes_order = []
         
-        # Add deobfuscation function only if one doesn't already exist
+        # Process includes from all components
+        # 1. From the original includes section
+        if 'includes' in components and components['includes']:
+            for line in components['includes'].split('\n'):
+                if line.strip().startswith('#include'):
+                    include_parts = line.strip().split(' ', 1)
+                    if len(include_parts) > 1:
+                        include_directive = include_parts[1].strip()
+                        if include_directive not in unique_includes:
+                            unique_includes[include_directive] = line.strip()
+                            includes_order.append(include_directive)
+        
+        # 2. From deobfuscation function (if needed)
+        if not self.has_deobfuscation_function and 'deobfuscation_function' in components:
+            deobf_includes = []
+            deobf_content = ""
+            
+            for line in components['deobfuscation_function'].split('\n'):
+                if line.strip().startswith('#include'):
+                    include_parts = line.strip().split(' ', 1)
+                    if len(include_parts) > 1:
+                        include_directive = include_parts[1].strip()
+                        if include_directive not in unique_includes:
+                            unique_includes[include_directive] = line.strip()
+                            includes_order.append(include_directive)
+                else:
+                    deobf_content += line + "\n"
+            
+            # Store the deobfuscation function without its includes for later use
+            components['deobfuscation_function'] = deobf_content.strip()
+        
+        # Now add all unique includes at the top in their original order
+        if includes_order:
+            includes_section = '\n'.join(unique_includes[inc] for inc in includes_order)
+            parts.append(includes_section)
+        
+        # Add deobfuscation function (without includes as we've already added them)
         if not self.has_deobfuscation_function and 'deobfuscation_function' in components:
             parts.append(components['deobfuscation_function'])
         
@@ -180,9 +222,7 @@ class CObfuscator:
             parts.append("/* Function proxies for reference obfuscation */")
             parts.append('\n'.join(components['proxy_functions']))
         
-        # Add globals, declarations, and functions
-        # We need to extract these from the obfuscated code since they should be there already
-        # but we don't want to duplicate the include statements
+        # Add obfuscated code (without includes)
         if 'obfuscated_code' in components:
             # Get the content without the includes
             content = components['obfuscated_code']

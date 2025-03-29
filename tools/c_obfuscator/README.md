@@ -12,6 +12,8 @@ A Python-based tool to obfuscate C code, now using clang for more accurate code 
 
 4. **Reference Proxying**: Creates proxy functions for all function calls to add an additional layer of indirection.
 
+5. **Code Optimization**: Removes comments and blank lines while preserving syntax as a final step before output.
+
 ## Requirements
 
 - Python 3.6+
@@ -62,7 +64,8 @@ This will:
 1. Obfuscate all string literals in the code using a byte-based (addition/subtraction) algorithm
 2. Scramble the order of function definitions while respecting dependencies
 3. Add proxy functions for indirect function calls
-4. Output the obfuscated code to `test_obf.c`
+4. Remove comments and blank lines to optimize the output
+5. Output the obfuscated code to `test_obf.c`
 
 ## How It Works
 
@@ -88,6 +91,13 @@ The tool extracts all function definitions from the source code, analyzes their 
 ### Reference Proxying
 
 The tool creates proxy functions for each function in the code and then replaces direct function calls with calls to these proxy functions. This adds an additional layer of indirection, making the code more difficult to analyze.
+
+### Code Optimization
+
+As a final step, the tool applies an optimizer that:
+- Removes all comments (block and line comments)
+- Removes blank lines while preserving syntax
+- Ensures maximum obfuscation with minimal file size
 
 ## Limitations
 
