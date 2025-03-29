@@ -2,9 +2,18 @@
 String Obfuscation Module - Handles string obfuscation in C code
 """
 
-import re
 import random
-from typing import List, Dict, Any
+import os
+import tempfile
+from typing import List, Dict, Any, Tuple
+
+try:
+    import clang.cindex
+    from clang.cindex import CursorKind, TokenKind
+    CLANG_AVAILABLE = True
+except ImportError:
+    CLANG_AVAILABLE = False
+    print("Warning: clang.cindex not available. String obfuscation will be limited.")
 
 
 def generate_encryption_key() -> List[int]:
@@ -51,6 +60,65 @@ static char* deobfuscate_string(const unsigned char* obfuscated, size_t len) {{
     return deobf_function
 
 
+def create_temp_file(code: str) -> str:
+    """Create a temporary file with the given code.
+    
+    Args:
+        code: The code to write to the file
+        
+    Returns:
+        Path to the temporary file
+    """
+    with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as temp_file:
+        temp_file.write(code.encode('utf-8'))
+        return temp_file.name
+
+
+def get_string_literals(code: str, verbose: bool = False) -> List[Dict[str, Any]]:
+    """Find string literals in the code using clang
+    
+    Args:
+        code: The code to search
+        verbose: Whether to print verbose output
+        
+    Returns:
+        List of string literals with positions
+    """
+    if not CLANG_AVAILABLE:
+        if verbose:
+            print("Warning: clang.cindex not available. String extraction will be limited.")
+        return []
+    
+    temp_file_path = create_temp_file(code)
+    
+    try:
+        # Parse the code with clang
+        index = clang.cindex.Index.create()
+        tu = index.parse(temp_file_path, args=['-x', 'c'])
+        
+        string_literals = []
+        
+        # Find all string literals
+        for token in tu.get_tokens(extent=tu.cursor.extent):
+            if token.kind == TokenKind.LITERAL and token.spelling.startswith('"'):
+                # This is a string literal
+                string_literals.append({
+                    'text': token.spelling,
+                    'start': token.extent.start.offset,
+                    'end': token.extent.end.offset
+                })
+        
+        if verbose:
+            print(f"Found {len(string_literals)} string literals using clang")
+        
+        return string_literals
+    
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+
+
 def obfuscate_strings_in_text(text: str, encryption_key: List[int], verbose: bool = False) -> str:
     """Obfuscate string literals in the given text
     
@@ -62,69 +130,50 @@ def obfuscate_strings_in_text(text: str, encryption_key: List[int], verbose: boo
     Returns:
         Text with string literals obfuscated
     """
-    # Extract all string literals from the text
+    # Make a copy of the original text
     result = text
     
-    # First handle printf format strings (which need special handling due to format specifiers)
-    printf_pattern = r'PRINTF\s*\(\s*("(?:[^"\\]|\\.)*"(?:\s*,)?(?:\s*"(?:[^"\\]|\\.)*")*)'
+    # Find all string literals in the result
+    string_literals = get_string_literals(result, verbose)
     
-    for match in re.finditer(printf_pattern, result, re.DOTALL):
-        format_str_group = match.group(1)
+    # We need to process matches in reverse order to avoid invalidating offsets
+    for string_lit in sorted(string_literals, key=lambda x: x['start'], reverse=True):
+        string_content = string_lit['text']
         
-        # Check if this is actually a format string with arguments
-        if '\\n' in format_str_group or '%' in format_str_group:
-            if verbose:
-                shortened = format_str_group[:20] + ('...' if len(format_str_group) > 20 else '')
-                print(f"Obfuscated printf format string: {shortened}")
-                
-            # Extract the individual parts: format string and literal parts
-            parts = re.findall(r'"([^"]*)"', format_str_group)
-            
-            if len(parts) == 1:
-                # Single format string - simple case
-                obfuscated = _obfuscate_string(parts[0], encryption_key)
-                result = result.replace(f'"{parts[0]}"', f'deobfuscate_string((const unsigned char[]){{' + obfuscated + '}}, {len(parts[0])})')
-            else:
-                # Multiple string parts in a printf - more complex
-                if verbose:
-                    print(f"Obfuscated format string with {len(parts)} parts")
-                
-                # Build a replacement that preserves the original structure
-                replacement = format_str_group
-                for part in parts:
-                    if part:  # Skip empty strings
-                        obfuscated = _obfuscate_string(part, encryption_key)
-                        replacement = replacement.replace(f'"{part}"', f'deobfuscate_string((const unsigned char[]){{' + obfuscated + '}}, {len(part)})')
-                
-                result = result.replace(format_str_group, replacement)
-    
-    # Then handle simple string literals (PUTS, assignments, etc.)
-    string_pattern = r'"((?:[^"\\]|\\.)*)"'
-    
-    for match in re.finditer(string_pattern, result):
-        string_content = match.group(1)
-        original = f'"{string_content}"'
-        
-        # Skip already processed strings (from printf handling)
-        if 'deobfuscate_string(' in original:
+        # Skip empty strings or very short strings
+        if len(string_content) <= 2:  # Just quotes
             continue
             
-        # Skip empty strings
-        if not string_content:
+        # Remove quotes to get actual content
+        string_content = string_content[1:-1]
+            
+        # Skip already processed strings
+        if 'deobfuscate_string(' in string_content:
             continue
             
+        # Get the start and end positions of the string literal
+        start = string_lit['start']
+        end = string_lit['end']
+        
+        # Process the string content for length calculation
+        try:
+            processed_string = bytes(string_content, 'utf-8').decode('unicode_escape', errors='replace')
+            actual_length = len(processed_string)
+        except:
+            actual_length = len(string_content)
+        
         # Obfuscate the string
         obfuscated = _obfuscate_string(string_content, encryption_key)
-        replacement = f'deobfuscate_string((const unsigned char[]){{' + obfuscated + '}}, {len(string_content)})'
+        replacement = f'deobfuscate_string((const unsigned char[]){{{obfuscated}}}, {actual_length})'
+        
+        # Perform the replacement
+        result = result[:start] + replacement + result[end:]
         
         if verbose:
             shortened = string_content[:20] + ('...' if len(string_content) > 20 else '')
             print(f'Obfuscated string: "{shortened}"')
-        
-        # Replace in the result, but only whole strings (not parts of other replacements)
-        result = result.replace(original, replacement)
     
-    return result 
+    return result
 
 
 def _obfuscate_string(string: str, key: List[int]) -> str:
@@ -152,4 +201,23 @@ def _obfuscate_string(string: str, key: List[int]) -> str:
         obfuscated_bytes.append(obfuscated_byte)
     
     # Format as comma-separated list
-    return ', '.join(str(b) for b in obfuscated_bytes) 
+    return ', '.join(str(b) for b in obfuscated_bytes)
+
+
+def encrypt_string(string, key):
+    """Encrypt a string with a key.
+    
+    Args:
+        string: The string to encrypt
+        key: The encryption key (list of bytes)
+        
+    Returns:
+        The encrypted string formatted for C code
+    """
+    encrypted = []
+    for i, char in enumerate(string):
+        encrypted_byte = (ord(char) + key[i % len(key)]) % 256
+        encrypted.append(encrypted_byte)
+        
+    # Format for C code
+    return ', '.join(str(b) for b in encrypted) 

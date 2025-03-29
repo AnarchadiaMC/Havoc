@@ -1,0 +1,15 @@
+# C Obfuscator Dependencies
+
+# Clang - for C code parsing and analysis
+clang>=14.0.0
+libclang>=14.0.0
+clang-format>=14.0.0
+
+# Core Python libraries (typically included in standard Python installation)
+typing
+tempfile
+os
+shutil
+random
+argparse
+sys 

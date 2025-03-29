@@ -3,7 +3,72 @@ Function Scrambling Module - Handles reordering of functions
 """
 
 import random
-from typing import List, Dict, Set, Any
+import os
+import tempfile
+import re
+from typing import List, Dict, Set, Any, Optional
+
+try:
+    import clang.cindex
+    from clang.cindex import CursorKind
+    CLANG_AVAILABLE = True
+except ImportError:
+    CLANG_AVAILABLE = False
+    print("Warning: clang.cindex module not available for function scrambling. Using basic sorting.")
+
+
+def find_function_dependencies_with_clang(code: str, functions: List[str]) -> Dict[str, Set[str]]:
+    """
+    Use clang to find function dependencies in the code
+    
+    Args:
+        code: C code to analyze
+        functions: List of function names to find dependencies for
+        
+    Returns:
+        Dictionary mapping function names to sets of dependency names
+    """
+    if not CLANG_AVAILABLE:
+        return {}
+        
+    # Create a set of function names for faster lookup
+    function_set = set(functions)
+    
+    # Create a temporary file to hold the code
+    with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as temp_file:
+        temp_file.write(code.encode('utf-8'))
+        temp_file_path = temp_file.name
+    
+    try:
+        # Parse the code with clang
+        index = clang.cindex.Index.create()
+        tu = index.parse(temp_file_path)
+        
+        # Map of function names to their dependencies
+        dependencies = {func: set() for func in functions}
+        
+        # First pass: identify all function definitions and their call expressions
+        for cursor in tu.cursor.walk_preorder():
+            if cursor.kind == CursorKind.FUNCTION_DECL and cursor.is_definition():
+                function_name = cursor.spelling
+                if function_name in function_set:
+                    # Find all function calls within this function
+                    called_functions = set()
+                    for child in cursor.walk_preorder():
+                        if child.kind == CursorKind.CALL_EXPR:
+                            called_func = child.spelling
+                            if called_func in function_set and called_func != function_name:
+                                called_functions.add(called_func)
+                    
+                    # Add the dependencies
+                    dependencies[function_name].update(called_functions)
+        
+        return dependencies
+    
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
 
 
 def topological_sort(functions: List[Dict[str, Any]], dependencies: Dict[str, Set[str]], verbose: bool = False) -> List[str]:
@@ -50,24 +115,60 @@ def topological_sort(functions: List[Dict[str, Any]], dependencies: Dict[str, Se
     return sorted_functions
 
 
-def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[str]], verbose: bool = False) -> List[Dict]:
+def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[str]], verbose: bool = False, code: Optional[str] = None) -> List[Dict]:
     """Scramble the order of functions while respecting dependencies
     
     Args:
         functions: Dictionary of functions (name -> function info)
         dependencies: Dictionary of function dependencies
         verbose: Whether to print verbose output
+        code: Optional full code for clang-based analysis
         
     Returns:
         List of functions in scrambled order
     """
-    function_names = list(functions.keys())
+    # Filter functions to exclude main
+    excluded_functions = ["main"]
+    function_names = [f for f in list(functions.keys()) if f not in excluded_functions]
+    
+    if not function_names:
+        if verbose:
+            print("No functions to scramble")
+        return []
     
     # Create a list to hold the sorted functions
     sorted_functions = []
     
     # Keep track of which functions have been added
     added = set()
+    
+    # If clang is available and code is provided, try to use clang for better dependency analysis
+    clang_deps = {}
+    if CLANG_AVAILABLE and code:
+        if verbose:
+            print("Using clang for function dependency analysis")
+        clang_deps = find_function_dependencies_with_clang(code, function_names)
+        
+        if clang_deps and verbose:
+            print("Clang detected these dependencies:")
+            for func, deps in clang_deps.items():
+                if deps:
+                    print(f"  {func} depends on: {', '.join(deps)}")
+                else:
+                    print(f"  {func} depends on: none")
+    
+    # Merge clang dependencies with existing dependencies if available
+    if clang_deps:
+        merged_deps = {}
+        for func in function_names:
+            # Start with existing dependencies
+            merged_deps[func] = set(dependencies.get(func, []))
+            # Add clang-detected dependencies
+            if func in clang_deps:
+                merged_deps[func].update(clang_deps[func])
+        
+        # Convert back to lists for compatibility
+        dependencies = {func: list(deps) for func, deps in merged_deps.items()}
     
     # Helper function to add a function and its dependencies
     def add_function_with_deps(func_name):
@@ -77,10 +178,19 @@ def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[
         
         # First add dependencies
         for dep in dependencies.get(func_name, []):
-            add_function_with_deps(dep)
+            if dep in function_names:  # Only add dependencies that are in our function list
+                add_function_with_deps(dep)
         
         # Then add the function itself
-        if func_name not in added:
+        if func_name not in added and func_name in functions:
+            # Detect and skip duplicate globals/variables
+            func_content = functions[func_name]['text']
+            if re.search(r'^\s*(SEC_DATA|static)\s+.*\s+\w+\s*=\s*', func_content, re.MULTILINE):
+                if verbose:
+                    print(f"Skipping function with global definitions: {func_name}")
+                added.add(func_name)
+                return
+            
             sorted_functions.append(functions[func_name])
             added.add(func_name)
             if verbose:
@@ -90,6 +200,8 @@ def scramble_functions(functions: Dict[str, Dict], dependencies: Dict[str, List[
     while len(added) < len(function_names):
         # Pick a random function that hasn't been added yet
         remaining = [f for f in function_names if f not in added]
+        if not remaining:
+            break
         next_func = random.choice(remaining)
         
         # Add it with its dependencies

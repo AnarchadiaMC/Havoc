@@ -41,3 +41,6 @@ client/Modules/
 rebuild_havoc.sh
 run_havoc.sh
 /tools/c_obfuscator/modules/__pycache__
+tools/c_obfuscator/UserRequests.md
+tools/c_obfuscator/Project.md
+tools/c_obfuscator/Learning.md
