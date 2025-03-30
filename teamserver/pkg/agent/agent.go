@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"encoding/binary"
+
 	//"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,10 +12,10 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
-	"reflect"
 
 	"Havoc/pkg/common"
 	"Havoc/pkg/common/crypt"
@@ -147,7 +148,7 @@ func BuildPayloadMessage(Jobs []Job, AesKey []byte, AesIv []byte) []byte {
 				} else {
 					binary.LittleEndian.PutUint32(boolean, 0)
 				}
-				
+
 				DataPayload = append(DataPayload, boolean...)
 
 				break
@@ -279,13 +280,13 @@ func RegisterInfoToInstance(Header Header, RegisterInfo map[string]any) *Agent {
 
 	// Updated OS Version handling
 	if val, ok := RegisterInfo["OS Version"]; ok {
-	    // Assuming val is a string representing the OS version, split it by '.' to get the version parts
-	    versionParts := strings.Split(val.(string), ".")
-	    OsVersion := make([]int, len(versionParts))
-	    for i, part := range versionParts {
-		OsVersion[i], _ = strconv.Atoi(part)
-	    }
-	    agent.Info.OSVersion = getWindowsVersionString(OsVersion)
+		// Assuming val is a string representing the OS version, split it by '.' to get the version parts
+		versionParts := strings.Split(val.(string), ".")
+		OsVersion := make([]int, len(versionParts))
+		for i, part := range versionParts {
+			OsVersion[i], _ = strconv.Atoi(part)
+		}
+		agent.Info.OSVersion = getWindowsVersionString(OsVersion)
 	}
 
 	if val, ok := RegisterInfo["OS Build"]; ok {
@@ -295,7 +296,7 @@ func RegisterInfoToInstance(Header Header, RegisterInfo map[string]any) *Agent {
 	if val, ok := RegisterInfo["OS Arch"]; ok {
 		agent.Info.OSArch = val.(string)
 	}
-	
+
 	if val, ok := RegisterInfo["SleepDelay"]; ok {
 		switch v := val.(type) {
 		case float64:
@@ -312,12 +313,10 @@ func RegisterInfoToInstance(Header Header, RegisterInfo map[string]any) *Agent {
 			agent.Info.SleepDelay = 0
 		}
 	}
-	
 
 	agent.Info.FirstCallIn = time.Now().Format("02/01/2006 15:04:05")
-	
+
 	agent.Info.LastCallIn = time.Now().Format("02-01-2006 15:04:05")
-	
 
 	agent.BackgroundCheck = false
 	agent.Active = true
@@ -431,8 +430,8 @@ func ParseDemonRegisterRequest(AgentID int, Parser *parser.Parser, ExternalIP st
 				Hostname, Username, DomainName, InternalIP, ExternalIP))
 
 			ProcessName = Parser.ParseUTF16String()
-			ProcessPID  = Parser.ParseInt32()
-			ProcessTID  = Parser.ParseInt32()
+			ProcessPID = Parser.ParseInt32()
+			ProcessTID = Parser.ParseInt32()
 			ProcessPPID = Parser.ParseInt32()
 			ProcessArch = Parser.ParseInt32()
 			Elevated = Parser.ParseInt32()
@@ -528,8 +527,8 @@ func ParseDemonRegisterRequest(AgentID int, Parser *parser.Parser, ExternalIP st
 			process := strings.Split(ProcessName, "\\")
 
 			Session.Info.ProcessName = process[len(process)-1]
-			Session.Info.ProcessPID  = ProcessPID
-			Session.Info.ProcessTID  = ProcessTID
+			Session.Info.ProcessPID = ProcessPID
+			Session.Info.ProcessTID = ProcessTID
 			Session.Info.ProcessPPID = ProcessPPID
 			Session.Info.ProcessPath = ProcessName
 			Session.Info.BaseAddress = BaseAddress
@@ -645,7 +644,7 @@ func (a *Agent) RequestCompleted(RequestID uint32) {
 }
 
 func (a *Agent) AddJobToQueue(job Job) []Job {
-	// store the RequestID									
+	// store the RequestID
 	a.AddRequest(job)
 	// if it's a pivot agent then add the job to the parent
 	if a.Pivots.Parent != nil {
@@ -920,7 +919,7 @@ func (a *Agent) PortFwdNew(SocketID, LclAddr, LclPort, FwdAddr, FwdPort int, Tar
 	}
 
 	a.PortFwdsMtx.Lock()
-	
+
 	a.PortFwds = append(a.PortFwds, portfwd)
 
 	a.PortFwdsMtx.Unlock()
@@ -1043,7 +1042,7 @@ func (a *Agent) PortFwdClose(SocketID int) {
 			/* remove the socket from the array */
 			a.PortFwds = append(a.PortFwds[:i], a.PortFwds[i+1:]...)
 
-			break;
+			break
 		}
 
 	}
@@ -1054,12 +1053,12 @@ func (a *Agent) SocksClientAdd(SocketID int32, conn net.Conn, ATYP byte, IpDomai
 
 	var client = new(SocksClient)
 
-	client.SocketID  = SocketID
-	client.Conn      = conn
+	client.SocketID = SocketID
+	client.Conn = conn
 	client.Connected = false
-	client.ATYP      = ATYP
-	client.IpDomain  = IpDomain
-	client.Port      = Port
+	client.ATYP = ATYP
+	client.IpDomain = IpDomain
+	client.Port = Port
 
 	a.SocksCliMtx.Lock()
 
@@ -1095,8 +1094,8 @@ func (a *Agent) SocksClientGet(SocketID int) *SocksClient {
 
 func (a *Agent) SocksClientRead(client *SocksClient) ([]byte, error) {
 	var (
-		data  = make([]byte, 0x10000)
-		read  []byte
+		data = make([]byte, 0x10000)
+		read []byte
 	)
 
 	if client != nil {
@@ -1180,7 +1179,7 @@ func (a *Agent) SocksServerRemove(Addr string) {
 			/* remove the socket from the array */
 			a.SocksSvr = append(a.SocksSvr[:i], a.SocksSvr[i+1:]...)
 
-			break;
+			break
 		}
 
 	}
@@ -1247,7 +1246,7 @@ func getWindowsVersionString(OsVersion []int) string {
 		WinVersion = "Windows 2022 Server 22H2"
 	} else if OsVersion[0] == 10 && OsVersion[1] == 0 && OsVersion[2] != 0x0000001 && OsVersion[4] == 17763 {
 		WinVersion = "Windows 2019 Server"
-	} else if OsVersion[0] == 10 && OsVersion[1] == 0 && OsVersion[2] == 0x0000001 && (OsVersion[4] >= 22000 && OsVersion[4] <= 22621) {
+	} else if OsVersion[0] == 10 && OsVersion[1] == 0 && OsVersion[2] == 0x0000001 && OsVersion[4] >= 22000 {
 		WinVersion = "Windows 11"
 	} else if OsVersion[0] == 10 && OsVersion[1] == 0 && OsVersion[2] != 0x0000001 {
 		WinVersion = "Windows 2016 Server"
