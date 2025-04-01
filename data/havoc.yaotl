@@ -1,15 +1,11 @@
 Teamserver {
-	Host = "0.0.0.0"
+	Host = "127.0.0.1"
 	Port = 40056
 }
 
 Operators {
-	user "5pider" {
-		Password = "password1234"
-	}
-
-	user "Neo" {
-		Password = "password1234"
+	user "root" {
+		Password = "toor"
 	}
 }
 
