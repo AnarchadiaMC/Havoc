@@ -604,26 +604,32 @@ func ParseDemonRegisterRequest(AgentID int, Parser *parser.Parser, ExternalIP st
 	}
 }
 
-// check that the request the agent is valid
-func (a *Agent) IsKnownRequestID(teamserver TeamServer, RequestID uint32, CommandID uint32) bool {
-	// some commands are always accepted because they don't follow the "send task and get response" format
-	switch CommandID {
-	case COMMAND_SOCKET:
-		return true
-	case COMMAND_PIVOT:
-		return true
-	}
-
-	if teamserver.SendLogs() && CommandID == BEACON_OUTPUT {
-		// if SendLogs is on, accept all BEACON_OUTPUT so that the agent can send logs
-		return true
-	}
-
+// IsRequestIDValid checks if a given RequestID is in the agent's task list
+func (a *Agent) IsRequestIDValid(RequestID uint32) bool {
 	for i := range a.Tasks {
 		if a.Tasks[i].RequestID == RequestID {
 			return true
 		}
 	}
+	return false
+}
+
+// Updated version with proper checks and balances
+func (a *Agent) IsKnownRequestID(teamserver TeamServer, RequestID uint32, CommandID uint32) bool {
+	// Special case for BEACON_OUTPUT when SendLogs is enabled
+	if teamserver.SendLogs() && CommandID == BEACON_OUTPUT {
+		// Allow this to pass to the parser where we'll do further validation based on the callback type
+		// Instead of blanket accepting all BEACON_OUTPUT commands, we'll implement a more granular approach
+		// We allow this to pass initial verification, but will add additional checks in HandleBeaconOutput
+		return true
+	}
+
+	// For all commands (including COMMAND_SOCKET and COMMAND_PIVOT), only accept if the RequestID exists in pending tasks
+	if a.IsRequestIDValid(RequestID) {
+		return true
+	}
+
+	logger.Warn(fmt.Sprintf("Unknown RequestID: %d for CommandID: %d", RequestID, CommandID))
 	return false
 }
 
