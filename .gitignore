@@ -36,12 +36,15 @@ client/Modules/
 /.vscode
 /.cache
 
-# Ignore obfuscated files
+# Ignore obfuscation files
 *_obf.*
 rebuild_havoc.sh
 run_havoc.sh
-/tools/c_obfuscator/modules/__pycache__
+*__pycache__
+
+# We use MD files for our AI models, thus we've ignored them.
 *UserRequests.md
 *Project.md
 *Learning.md
-
+*detections.md
+/86_64loader

@@ -2103,34 +2103,35 @@ func (a *Agent) TaskPrepare(Command int, Info any, Message *map[string]string, C
 
 			a.SocksSvrMtx.Lock()
 
-			for i := range a.SocksSvr {
+			// Create a temporary array to store servers that need to be closed
+			servers := make([]*SocksServer, len(a.SocksSvr))
+			copy(servers, a.SocksSvr)
 
-				/* close the server */
-				a.SocksSvr[i].Server.Close()
+			// Clear the original array first
+			a.SocksSvr = []*SocksServer{}
 
-				/* close every connection that the agent has with this socks proxy */
-				for client := range a.SocksSvr[i].Server.Clients {
+			// Now close each server and its clients
+			for _, server := range servers {
+				// Close the server
+				server.Server.Close()
 
-					/* close the client connection */
-					a.SocksClientClose(a.SocksSvr[i].Server.Clients[client])
+				// Close every connection that the agent has with this socks proxy
+				for client := range server.Server.Clients {
+					// Close the client connection
+					a.SocksClientClose(server.Server.Clients[client])
 
-					/* make a new job */
+					// Make a new job
 					var job = Job{
 						Command: COMMAND_SOCKET,
 						Data: []any{
 							SOCKET_COMMAND_CLOSE,
-							a.SocksSvr[i].Server.Clients[client],
+							server.Server.Clients[client],
 						},
 					}
 
-					/* append the job to the task queue */
+					// Append the job to the task queue
 					a.AddJobToQueue(job)
-
 				}
-
-				/* remove the socks server from the array */
-				a.SocksSvr = append(a.SocksSvr[:i], a.SocksSvr[i+1:]...)
-
 			}
 
 			a.SocksSvrMtx.Unlock()
